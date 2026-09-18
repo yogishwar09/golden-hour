@@ -206,6 +206,23 @@ describe('malformed requests', () => {
     await request(app).get('/api/health').set('Origin', 'http://localhost:5173').expect(200);
   });
 
+  it('accepts any localhost port in development', async () => {
+    // Vite moves to the next free port when its default is taken, and the only
+    // symptom used to be a CORS rejection on the sign-in screen.
+    for (const origin of [
+      'http://localhost:5174',
+      'http://localhost:3000',
+      'http://127.0.0.1:4173',
+    ]) {
+      await request(app).get('/api/health').set('Origin', origin).expect(200);
+    }
+  });
+
+  it('does not extend that leniency to a lookalike host', async () => {
+    // `localhost.evil.com` must not pass for `localhost`.
+    await request(app).get('/api/health').set('Origin', 'http://localhost.evil.com').expect(403);
+  });
+
   it('serves a request with no Origin header at all', async () => {
     // curl, a health probe, or a server-to-server call.
     await request(app).get('/api/health').expect(200);

@@ -11,6 +11,7 @@ import cors from 'cors';
 import compression from 'compression';
 import { pinoHttp } from 'pino-http';
 import { env } from './config/env.js';
+import { isOriginAllowed } from './config/cors.js';
 import { logger } from './config/logger.js';
 import { databaseState } from './config/db.js';
 import { apiRoutes } from './routes/index.js';
@@ -41,7 +42,7 @@ export function createApp(): Express {
       origin(origin, callback) {
         // No Origin header: a server-to-server call, curl, or a health probe.
         if (!origin) return callback(null, true);
-        if (env.corsOrigins.includes(origin)) return callback(null, true);
+        if (isOriginAllowed(origin)) return callback(null, true);
         // An ApiError rather than a bare Error, so a disallowed origin is
         // reported as the 403 it is instead of looking like a server fault.
         callback(ApiError.forbidden(`Origin ${origin} is not allowed`));

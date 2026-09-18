@@ -16,6 +16,7 @@ import {
   type ServerToClientEvents,
 } from '@sas/shared';
 import { env } from '../config/env.js';
+import { isOriginAllowed } from '../config/cors.js';
 import { logger } from '../config/logger.js';
 import { verifyAccessToken } from '../middleware/auth.js';
 import { Ambulance, EmergencyRequest, User, type UserDocument } from '../models/index.js';
@@ -44,7 +45,16 @@ const lastLocationAt = new WeakMap<AppSocket, number>();
 
 export function createSocketServer(httpServer: HttpServer): AppServer {
   const io: AppServer = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
-    cors: { origin: env.corsOrigins, credentials: true },
+    // The same origin rule as the REST API. Without this the page would load
+    // and then silently fail to receive any live updates, which is a far more
+    // confusing failure than a refused request.
+    cors: {
+      origin: (origin, callback) => {
+        if (!origin || isOriginAllowed(origin)) return callback(null, true);
+        callback(new Error(`Origin ${origin} is not allowed`));
+      },
+      credentials: true,
+    },
     // Long enough to ride out a phone switching from wifi to mobile data
     // mid-incident without dropping the crew's session.
     pingTimeout: 25_000,
