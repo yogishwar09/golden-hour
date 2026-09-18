@@ -196,13 +196,17 @@ export function DriverShift() {
 
   const mapPoints = useMemo(() => {
     const points = [];
+    // The device's own fix when there is one; otherwise the vehicle's last
+    // known position, so a crew without location permission still sees their
+    // own ambulance rather than an empty map of the city.
     if (geo.position) points.push(geo.position);
+    else if (vehicle?.location) points.push(vehicle.location);
     if (activeCase) points.push(activeCase.pickup);
     if (activeCase?.status === 'TRANSPORTING' && activeCase.hospital) {
       points.push(activeCase.hospital.location);
     }
     return points;
-  }, [geo.position, activeCase]);
+  }, [geo.position, activeCase, vehicle]);
 
   if (loading) return <FullPageLoader label="Loading your shift" />;
 
@@ -401,7 +405,7 @@ export function DriverShift() {
       <Card className="min-h-[420px] overflow-hidden p-0 lg:min-h-0">
         <MapView
           className="h-full min-h-[420px] w-full"
-          centre={geo.position ?? activeCase?.pickup}
+          centre={geo.position ?? vehicle?.location ?? activeCase?.pickup ?? undefined}
           patient={activeCase?.pickup ?? null}
           ambulances={
             vehicle && geo.position

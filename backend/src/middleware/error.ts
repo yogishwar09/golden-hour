@@ -18,9 +18,32 @@ export function notFoundHandler(req: Request, _res: Response, next: NextFunction
   next(ApiError.notFound(`No route matches ${req.method} ${req.path}`));
 }
 
-/** Maps database-level failures onto the right HTTP status. */
+/**
+ * Shape of the errors `body-parser` raises. It tags each one with a `type`,
+ * which is how a malformed body is told apart from an oversized one.
+ */
+interface BodyParserError {
+  type?: string;
+  status?: number;
+}
+
+/** Maps framework and database failures onto the right HTTP status. */
 function translate(error: unknown): ApiErrorType | null {
   if (isApiError(error)) return error;
+
+  // Body-parser failures are the caller's mistake, not ours. Left untranslated
+  // they surface as a 500, which both misleads the caller and fills the logs
+  // with stack traces for what is ordinary malformed input.
+  const bodyError = error as BodyParserError | null;
+  if (bodyError?.type === 'entity.too.large') {
+    return new ApiError(413, 'PAYLOAD_TOO_LARGE', 'That request is too large.');
+  }
+  if (bodyError?.type === 'entity.parse.failed') {
+    return ApiError.badRequest('The request body is not valid JSON.');
+  }
+  if (bodyError?.type === 'encoding.unsupported') {
+    return ApiError.badRequest('That content encoding is not supported.');
+  }
 
   if (error instanceof MongoServerError && error.code === 11000) {
     const field = Object.keys((error as { keyValue?: Record<string, unknown> }).keyValue ?? {})[0];

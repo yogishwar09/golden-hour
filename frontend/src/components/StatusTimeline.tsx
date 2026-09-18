@@ -21,11 +21,14 @@ export function StatusTimeline({
   status: RequestStatus;
   events: TimelineEventDto[];
 }) {
-  const ended = ['CANCELLED', 'NO_AMBULANCE_AVAILABLE'].includes(status);
+  // A case that stopped short: the remaining steps were never reached.
+  const endedEarly = ['CANCELLED', 'NO_AMBULANCE_AVAILABLE'].includes(status);
+  // A case that is over, however it ended. Its last step is done, not pending.
+  const isFinished = endedEarly || status === 'COMPLETED';
 
   // For a case that ended early, show only what actually happened plus the
   // terminal event; showing unreachable future steps would be misleading.
-  const steps = ended ? events.map((event) => event.status) : FULL_JOURNEY;
+  const steps = endedEarly ? events.map((event) => event.status) : FULL_JOURNEY;
 
   const timeFor = (step: RequestStatus): string | null => {
     const match = events.find((event) => event.status === step);
@@ -38,8 +41,8 @@ export function StatusTimeline({
     <ol className="relative space-y-0.5">
       {steps.map((step, index) => {
         const reachedAt = timeFor(step);
-        const isDone = index < currentIndex || (index === currentIndex && ended);
-        const isCurrent = index === currentIndex && !ended;
+        const isDone = index < currentIndex || (index === currentIndex && isFinished);
+        const isCurrent = index === currentIndex && !isFinished;
         const isFuture = index > currentIndex;
         const isLast = index === steps.length - 1;
 

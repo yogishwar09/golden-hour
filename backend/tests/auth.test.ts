@@ -159,3 +159,45 @@ describe('health endpoints', () => {
     expect(response.body.error.code).toBe('NOT_FOUND');
   });
 });
+
+describe('malformed requests', () => {
+  it('reports a body that is not valid JSON as a client error', async () => {
+    const response = await request(app)
+      .post('/api/auth/login')
+      .set('Content-Type', 'application/json')
+      .send('{"email": broken')
+      .expect(400);
+
+    // A parse failure is the caller's mistake; reporting it as a 500 would both
+    // mislead them and fill the logs with stack traces for ordinary bad input.
+    expect(response.body.error.code).toBe('BAD_REQUEST');
+  });
+
+  it('rejects an oversized body with 413 rather than a server error', async () => {
+    const response = await request(app)
+      .post('/api/auth/login')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ email: 'a'.repeat(200_000) }))
+      .expect(413);
+
+    expect(response.body.error.code).toBe('PAYLOAD_TOO_LARGE');
+  });
+
+  it('refuses a browser origin that is not allowed', async () => {
+    const response = await request(app)
+      .get('/api/health')
+      .set('Origin', 'https://evil.example.com')
+      .expect(403);
+
+    expect(response.body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('still serves an allowed origin', async () => {
+    await request(app).get('/api/health').set('Origin', 'http://localhost:5173').expect(200);
+  });
+
+  it('serves a request with no Origin header at all', async () => {
+    // curl, a health probe, or a server-to-server call.
+    await request(app).get('/api/health').expect(200);
+  });
+});

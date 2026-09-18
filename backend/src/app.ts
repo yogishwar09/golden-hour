@@ -16,6 +16,7 @@ import { databaseState } from './config/db.js';
 import { apiRoutes } from './routes/index.js';
 import { apiLimiter } from './middleware/rateLimit.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
+import { ApiError } from './utils/errors.js';
 
 export function createApp(): Express {
   const app = express();
@@ -41,7 +42,9 @@ export function createApp(): Express {
         // No Origin header: a server-to-server call, curl, or a health probe.
         if (!origin) return callback(null, true);
         if (env.corsOrigins.includes(origin)) return callback(null, true);
-        callback(new Error(`Origin ${origin} is not allowed`));
+        // An ApiError rather than a bare Error, so a disallowed origin is
+        // reported as the 403 it is instead of looking like a server fault.
+        callback(ApiError.forbidden(`Origin ${origin} is not allowed`));
       },
       credentials: true,
     }),
