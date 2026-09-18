@@ -33,8 +33,8 @@ import type { AmbulanceType } from '@sas/shared';
 let memoryServer: MongoMemoryServer | null = null;
 
 export const TEST_PASSWORD = 'Password123';
-/** A fixed point in Bengaluru, so distances in assertions are predictable. */
-export const CENTRE = { lat: 12.9716, lng: 77.5946 };
+/** A fixed point in Hyderabad, so distances in assertions are predictable. */
+export const CENTRE = { lat: 17.385, lng: 78.4867 };
 
 export async function startTestDatabase(): Promise<void> {
   // The same Mongoose configuration the server applies, so a setting that

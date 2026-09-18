@@ -22,18 +22,30 @@ import {
 } from '../models/index.js';
 import type { AmbulanceType, BloodGroup } from '@sas/shared';
 
-/** Bengaluru: a dense city centre with enough spread to show real routing. */
-const CITY_CENTRE = { lat: 12.9716, lng: 77.5946 };
+/**
+ * Hyderabad. The conventional city point (Abids/Koti), central to the old city,
+ * Secunderabad and the western IT corridor alike.
+ */
+const CITY_CENTRE = { lat: 17.385, lng: 78.4867 };
 
+/**
+ * Real Hyderabad hospitals, at their approximate locations, chosen to span the
+ * city: the old city, Secunderabad in the north, the Banjara/Jubilee Hills
+ * corridor, Gachibowli in the west and LB Nagar in the south-east.
+ *
+ * Gachibowli sits about 16 km out, which is past the first-pass dispatch radius
+ * -- useful, because it exercises the widened second sweep in a demo.
+ */
 const HOSPITALS = [
-  { name: 'City General Hospital', address: 'Kempegowda Rd, Majestic', lat: 12.9767, lng: 77.5713, traumaLevel: 1, beds: 320, specialties: ['Trauma', 'Cardiology', 'Neurology', 'ICU'] },
-  { name: 'Victoria Medical Centre', address: 'Fort Rd, Kalasipalya', lat: 12.9634, lng: 77.5744, traumaLevel: 1, beds: 280, specialties: ['Trauma', 'Burns', 'Orthopaedics'] },
-  { name: 'Indiranagar Multispeciality', address: '100 Feet Rd, Indiranagar', lat: 12.9784, lng: 77.6408, traumaLevel: 2, beds: 180, specialties: ['Cardiology', 'Paediatrics', 'Maternity'] },
-  { name: 'Koramangala Emergency Care', address: '80 Feet Rd, Koramangala', lat: 12.9352, lng: 77.6245, traumaLevel: 2, beds: 150, specialties: ['Emergency', 'Stroke Unit'] },
-  { name: 'Whitefield Community Hospital', address: 'ITPL Main Rd, Whitefield', lat: 12.9698, lng: 77.7500, traumaLevel: 3, beds: 120, specialties: ['Emergency', 'Maternity'] },
-  { name: 'Jayanagar Health Institute', address: '4th Block, Jayanagar', lat: 12.9250, lng: 77.5938, traumaLevel: 2, beds: 200, specialties: ['Cardiology', 'Neonatal', 'ICU'] },
-  { name: 'Hebbal Trauma Centre', address: 'Bellary Rd, Hebbal', lat: 13.0358, lng: 77.5970, traumaLevel: 1, beds: 240, specialties: ['Trauma', 'Neurosurgery'] },
-  { name: 'Electronic City Medicare', address: 'Hosur Rd, Electronic City', lat: 12.8452, lng: 77.6602, traumaLevel: 3, beds: 90, specialties: ['Emergency', 'Occupational Health'] },
+  { name: 'Osmania General Hospital', address: 'Afzal Gunj, Hyderabad', lat: 17.3743, lng: 78.4751, traumaLevel: 1, beds: 320, specialties: ['Trauma', 'Emergency', 'General Surgery', 'ICU'] },
+  { name: 'Gandhi Hospital', address: 'Padmarao Nagar, Secunderabad', lat: 17.4295, lng: 78.5008, traumaLevel: 1, beds: 280, specialties: ['Trauma', 'Burns', 'Orthopaedics', 'ICU'] },
+  { name: 'Nizam\'s Institute of Medical Sciences', address: 'Punjagutta, Hyderabad', lat: 17.4256, lng: 78.453, traumaLevel: 1, beds: 240, specialties: ['Neurosurgery', 'Cardiology', 'Nephrology', 'ICU'] },
+  { name: 'Yashoda Hospitals', address: 'Somajiguda, Hyderabad', lat: 17.4252, lng: 78.4576, traumaLevel: 2, beds: 200, specialties: ['Cardiology', 'Stroke Unit', 'Oncology'] },
+  { name: 'Apollo Hospitals', address: 'Jubilee Hills, Hyderabad', lat: 17.4174, lng: 78.4118, traumaLevel: 2, beds: 180, specialties: ['Cardiology', 'Transplant', 'Emergency'] },
+  { name: 'KIMS Hospitals', address: 'Minister Road, Secunderabad', lat: 17.4392, lng: 78.4879, traumaLevel: 2, beds: 190, specialties: ['Emergency', 'Cardiology', 'Orthopaedics'] },
+  { name: 'AIG Hospitals', address: 'Gachibowli, Hyderabad', lat: 17.4222, lng: 78.3372, traumaLevel: 2, beds: 160, specialties: ['Gastroenterology', 'Emergency', 'ICU'] },
+  { name: 'Niloufer Hospital for Women and Children', address: 'Red Hills, Lakdikapul', lat: 17.3933, lng: 78.4595, traumaLevel: 2, beds: 120, specialties: ['Neonatal', 'Paediatrics', 'Maternity'] },
+  { name: 'Kamineni Hospitals', address: 'LB Nagar, Hyderabad', lat: 17.3457, lng: 78.551, traumaLevel: 3, beds: 110, specialties: ['Emergency', 'Maternity', 'Orthopaedics'] },
 ];
 
 interface CrewSpec {
@@ -47,22 +59,23 @@ interface CrewSpec {
   offsetLng: number;
 }
 
+/** Telangana registrations; TG09 is the Hyderabad Central (Khairatabad) RTO. */
 const FLEET: CrewSpec[] = [
-  { vehicleNumber: 'KA01AB1001', type: 'ALS', driverName: 'Ravi Kumar', paramedic: 'Sneha Rao', hospitalIndex: 0, offsetLat: 0.004, offsetLng: 0.006 },
-  { vehicleNumber: 'KA01AB1002', type: 'BLS', driverName: 'Imran Shaikh', paramedic: 'Divya Menon', hospitalIndex: 0, offsetLat: -0.008, offsetLng: 0.012 },
-  { vehicleNumber: 'KA01AB1003', type: 'MICU', driverName: 'Anil Joseph', paramedic: 'Dr Kavya Nair', hospitalIndex: 1, offsetLat: 0.006, offsetLng: -0.004 },
-  { vehicleNumber: 'KA01AB1004', type: 'ALS', driverName: 'Suresh Babu', paramedic: 'Farhan Ali', hospitalIndex: 2, offsetLat: -0.005, offsetLng: -0.010 },
-  { vehicleNumber: 'KA01AB1005', type: 'BLS', driverName: 'Manjunath G', paramedic: 'Priya Iyer', hospitalIndex: 3, offsetLat: 0.009, offsetLng: 0.003 },
-  { vehicleNumber: 'KA01AB1006', type: 'NEONATAL', driverName: 'Vikram Shetty', paramedic: 'Dr Asha Pillai', hospitalIndex: 5, offsetLat: 0.003, offsetLng: 0.008 },
-  { vehicleNumber: 'KA01AB1007', type: 'ALS', driverName: 'Deepak Sharma', paramedic: 'Rohit Verma', hospitalIndex: 6, offsetLat: -0.011, offsetLng: 0.005 },
-  { vehicleNumber: 'KA01AB1008', type: 'BLS', driverName: 'Naveen Reddy', paramedic: 'Lakshmi Devi', hospitalIndex: 4, offsetLat: 0.007, offsetLng: -0.013 },
-  { vehicleNumber: 'KA01AB1009', type: 'ALS', driverName: 'Arjun Das', paramedic: 'Meera Krishnan', hospitalIndex: 7, offsetLat: -0.004, offsetLng: 0.009 },
-  { vehicleNumber: 'KA01AB1010', type: 'PTV', driverName: 'Ganesh Pai', paramedic: 'Sanjay Gupta', hospitalIndex: 1, offsetLat: 0.012, offsetLng: 0.011 },
+  { vehicleNumber: 'TG09AB1001', type: 'ALS', driverName: 'Ravi Teja', paramedic: 'Sneha Reddy', hospitalIndex: 0, offsetLat: 0.004, offsetLng: 0.006 },
+  { vehicleNumber: 'TG09AB1002', type: 'BLS', driverName: 'Mohammed Imran', paramedic: 'Ayesha Begum', hospitalIndex: 0, offsetLat: -0.008, offsetLng: 0.012 },
+  { vehicleNumber: 'TG09AB1003', type: 'MICU', driverName: 'Srinivas Reddy', paramedic: 'Dr Kavitha Rao', hospitalIndex: 1, offsetLat: 0.006, offsetLng: -0.004 },
+  { vehicleNumber: 'TG09AB1004', type: 'ALS', driverName: 'Venkatesh Rao', paramedic: 'Farhan Ahmed', hospitalIndex: 2, offsetLat: -0.005, offsetLng: -0.010 },
+  { vehicleNumber: 'TG09AB1005', type: 'BLS', driverName: 'Praveen Kumar', paramedic: 'Divya Sharma', hospitalIndex: 3, offsetLat: 0.009, offsetLng: 0.003 },
+  { vehicleNumber: 'TG09AB1006', type: 'NEONATAL', driverName: 'Syed Akbar', paramedic: 'Dr Asha Rani', hospitalIndex: 7, offsetLat: 0.003, offsetLng: 0.008 },
+  { vehicleNumber: 'TG09AB1007', type: 'ALS', driverName: 'Ramesh Goud', paramedic: 'Rohit Varma', hospitalIndex: 5, offsetLat: -0.011, offsetLng: 0.005 },
+  { vehicleNumber: 'TG09AB1008', type: 'BLS', driverName: 'Naveen Chary', paramedic: 'Lakshmi Prasanna', hospitalIndex: 4, offsetLat: 0.007, offsetLng: -0.013 },
+  { vehicleNumber: 'TG09AB1009', type: 'ALS', driverName: 'Kiran Yadav', paramedic: 'Meera Joseph', hospitalIndex: 8, offsetLat: -0.004, offsetLng: 0.009 },
+  { vehicleNumber: 'TG09AB1010', type: 'PTV', driverName: 'Abdul Kareem', paramedic: 'Sanjay Goud', hospitalIndex: 6, offsetLat: 0.012, offsetLng: 0.011 },
 ];
 
 const PATIENTS = [
   { name: 'Aarav Sharma', email: 'patient@demo.test', phone: '+919800000001', bloodGroup: 'O+' as BloodGroup, notes: 'Asthmatic; carries an inhaler.' },
-  { name: 'Meera Nair', email: 'meera@demo.test', phone: '+919800000002', bloodGroup: 'A+' as BloodGroup, notes: 'Type 2 diabetes.' },
+  { name: 'Fatima Begum', email: 'fatima@demo.test', phone: '+919800000002', bloodGroup: 'A+' as BloodGroup, notes: 'Type 2 diabetes.' },
   { name: 'Rahul Verma', email: 'rahul@demo.test', phone: '+919800000003', bloodGroup: 'B+' as BloodGroup, notes: '' },
 ];
 
@@ -203,7 +216,7 @@ async function seed(): Promise<void> {
     `  Password           ${env.SEED_PASSWORD}`,
     '',
     `  Patient            ${patients[0]?.email ?? 'patient@demo.test'}`,
-    '  Driver             driver@demo.test    (crews KA01AB1001, ALS)',
+    '  Driver             driver@demo.test    (crews TG09AB1001, ALS)',
     `  Hospital desk      ${hospitalStaff.email}`,
     `  Control room       ${admin.email}`,
     '',

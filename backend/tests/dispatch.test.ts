@@ -85,7 +85,7 @@ async function waitForOffer(vehicleNumber?: string) {
 
 describe('raising an emergency', () => {
   it('triages the call and returns a case immediately', async () => {
-    const { patientToken } = await scenario([{ number: 'KA01AA0001', metresAway: 500 }]);
+    const { patientToken } = await scenario([{ number: 'TG09AA0001', metresAway: 500 }]);
     const created = await raiseSos(patientToken, { emergencyType: 'CARDIAC' });
 
     expect(created.code).toMatch(/^SAS-[A-Z0-9]{5}$/);
@@ -96,32 +96,32 @@ describe('raising an emergency', () => {
 
   it('offers the case to the nearest suitable vehicle', async () => {
     const { patientToken } = await scenario([
-      { number: 'KA01FAR001', metresAway: 6000 },
-      { number: 'KA01NEAR01', metresAway: 400 },
+      { number: 'TG09FAR001', metresAway: 6000 },
+      { number: 'TG09NEAR01', metresAway: 400 },
     ]);
     await raiseSos(patientToken);
 
     const offered = await waitForOffer();
-    expect(offered.vehicleNumber).toBe('KA01NEAR01');
+    expect(offered.vehicleNumber).toBe('TG09NEAR01');
   });
 
   it('skips a vehicle that is not clinically capable of the case', async () => {
     // A basic vehicle is nearer, but a cardiac call needs advanced life support.
     const { patientToken } = await scenario([
-      { number: 'KA01BLS001', metresAway: 300, type: 'BLS' },
-      { number: 'KA01ALS001', metresAway: 3000, type: 'ALS' },
+      { number: 'TG09BLS001', metresAway: 300, type: 'BLS' },
+      { number: 'TG09ALS001', metresAway: 3000, type: 'ALS' },
     ]);
     await raiseSos(patientToken, { emergencyType: 'CARDIAC' });
 
     const offered = await waitForOffer();
-    expect(offered.vehicleNumber).toBe('KA01ALS001');
+    expect(offered.vehicleNumber).toBe('TG09ALS001');
   });
 
   it('never offers a vehicle that is off duty', async () => {
     const hospital = await createHospital();
     const driver = await createUser({ email: 'offduty@example.com', role: 'driver' });
     await createAmbulance({
-      vehicleNumber: 'KA01OFF001',
+      vehicleNumber: 'TG09OFF001',
       driver,
       hospital,
       at: offset(CENTRE, 200, 0),
@@ -141,7 +141,7 @@ describe('raising an emergency', () => {
   });
 
   it('refuses a second emergency while one is already open', async () => {
-    const { patientToken } = await scenario([{ number: 'KA01AA0001', metresAway: 500 }]);
+    const { patientToken } = await scenario([{ number: 'TG09AA0001', metresAway: 500 }]);
     await raiseSos(patientToken);
 
     const response = await request(app)
@@ -154,7 +154,7 @@ describe('raising an emergency', () => {
   });
 
   it('rejects coordinates that are not on the planet', async () => {
-    const { patientToken } = await scenario([{ number: 'KA01AA0001', metresAway: 500 }]);
+    const { patientToken } = await scenario([{ number: 'TG09AA0001', metresAway: 500 }]);
     await request(app)
       .post('/api/emergency')
       .set('Authorization', `Bearer ${patientToken}`)
@@ -166,12 +166,12 @@ describe('raising an emergency', () => {
 describe('the offer cascade', () => {
   it('moves the case to the next crew when the first declines', async () => {
     const { patientToken, crews } = await scenario([
-      { number: 'KA01NEAR01', metresAway: 300 },
-      { number: 'KA01NEXT01', metresAway: 2000 },
+      { number: 'TG09NEAR01', metresAway: 300 },
+      { number: 'TG09NEXT01', metresAway: 2000 },
     ]);
     const created = await raiseSos(patientToken);
 
-    await waitForOffer('KA01NEAR01');
+    await waitForOffer('TG09NEAR01');
     const decliningDriver = crews[0]!.driver;
     const declineToken = await login(app, decliningDriver.email);
 
@@ -181,11 +181,11 @@ describe('the offer cascade', () => {
       .send({ requestId: created.id, accept: false, reason: 'Vehicle fault' })
       .expect(200);
 
-    const second = await waitForOffer('KA01NEXT01');
-    expect(second.vehicleNumber).toBe('KA01NEXT01');
+    const second = await waitForOffer('TG09NEXT01');
+    expect(second.vehicleNumber).toBe('TG09NEXT01');
 
     // The declining vehicle is back in service, not stuck holding the case.
-    const released = await Ambulance.findOne({ vehicleNumber: 'KA01NEAR01' });
+    const released = await Ambulance.findOne({ vehicleNumber: 'TG09NEAR01' });
     expect(released?.status).toBe('AVAILABLE');
     expect(released?.stats.declinedOffers).toBe(1);
   });
@@ -193,23 +193,23 @@ describe('the offer cascade', () => {
   it('passes the case on when a crew does not answer in time', async () => {
     // The offer window is five seconds in tests; nobody answers the first offer.
     const { patientToken } = await scenario([
-      { number: 'KA01SLOW01', metresAway: 300 },
-      { number: 'KA01BACKUP', metresAway: 2500 },
+      { number: 'TG09SLOW01', metresAway: 300 },
+      { number: 'TG09BACKUP', metresAway: 2500 },
     ]);
     await raiseSos(patientToken);
-    await waitForOffer('KA01SLOW01');
+    await waitForOffer('TG09SLOW01');
 
     const next = await waitFor(async () => {
-      const vehicle = await Ambulance.findOne({ vehicleNumber: 'KA01BACKUP', status: 'OFFERED' });
+      const vehicle = await Ambulance.findOne({ vehicleNumber: 'TG09BACKUP', status: 'OFFERED' });
       return vehicle ?? null;
     });
     expect(next.status).toBe('OFFERED');
   });
 
   it('gives up cleanly when every nearby crew refuses', async () => {
-    const { patientToken, crews } = await scenario([{ number: 'KA01ONLY01', metresAway: 300 }]);
+    const { patientToken, crews } = await scenario([{ number: 'TG09ONLY01', metresAway: 300 }]);
     const created = await raiseSos(patientToken);
-    await waitForOffer('KA01ONLY01');
+    await waitForOffer('TG09ONLY01');
 
     const token = await login(app, crews[0]!.driver.email);
     await request(app)
@@ -229,7 +229,7 @@ describe('the offer cascade', () => {
     const hospital = await createHospital();
     const driver = await createUser({ email: 'solo@example.com', role: 'driver' });
     await createAmbulance({
-      vehicleNumber: 'KA01SOLO01',
+      vehicleNumber: 'TG09SOLO01',
       driver,
       hospital,
       at: offset(CENTRE, 200, 0),
@@ -254,7 +254,7 @@ describe('the offer cascade', () => {
         .expect(201),
     ]);
 
-    await waitForOffer('KA01SOLO01');
+    await waitForOffer('TG09SOLO01');
 
     // Exactly one case holds the vehicle; the other must report no availability
     // rather than double-booking it.
@@ -273,9 +273,9 @@ describe('the offer cascade', () => {
 
 describe('working a case through to completion', () => {
   async function acceptedCase() {
-    const context = await scenario([{ number: 'KA01RUN001', metresAway: 400 }]);
+    const context = await scenario([{ number: 'TG09RUN001', metresAway: 400 }]);
     const created = await raiseSos(context.patientToken);
-    await waitForOffer('KA01RUN001');
+    await waitForOffer('TG09RUN001');
 
     const driverToken = await login(app, context.crews[0]!.driver.email);
     await request(app)
@@ -296,10 +296,10 @@ describe('working a case through to completion', () => {
       .expect(200);
 
     expect(response.body.request.status).toBe('ASSIGNED');
-    expect(response.body.request.ambulance.vehicleNumber).toBe('KA01RUN001');
+    expect(response.body.request.ambulance.vehicleNumber).toBe('TG09RUN001');
     expect(response.body.request.hospital).not.toBeNull();
 
-    const vehicle = await Ambulance.findOne({ vehicleNumber: 'KA01RUN001' });
+    const vehicle = await Ambulance.findOne({ vehicleNumber: 'TG09RUN001' });
     expect(vehicle?.status).toBe('DISPATCHED');
     expect(vehicle?.activeRequest?.toString()).toBe(created.id);
   });
@@ -322,7 +322,7 @@ describe('working a case through to completion', () => {
     const outsider = await createUser({ email: 'outsider@example.com', role: 'driver' });
     const hospital = await createHospital();
     await createAmbulance({
-      vehicleNumber: 'KA01OTHER1',
+      vehicleNumber: 'TG09OTHER1',
       driver: outsider,
       hospital,
       at: offset(CENTRE, 5000, 0),
@@ -359,7 +359,7 @@ describe('working a case through to completion', () => {
       'ON_SCENE',
     );
 
-    const vehicle = await Ambulance.findOne({ vehicleNumber: 'KA01RUN001' });
+    const vehicle = await Ambulance.findOne({ vehicleNumber: 'TG09RUN001' });
     expect(vehicle?.status).toBe('AVAILABLE');
     expect(vehicle?.activeRequest).toBeNull();
     expect(vehicle?.stats.completedTrips).toBe(1);
@@ -399,9 +399,9 @@ describe('working a case through to completion', () => {
 
 describe('cancellation', () => {
   it('frees an offered vehicle when the caller cancels', async () => {
-    const { patientToken } = await scenario([{ number: 'KA01CAN001', metresAway: 300 }]);
+    const { patientToken } = await scenario([{ number: 'TG09CAN001', metresAway: 300 }]);
     const created = await raiseSos(patientToken);
-    await waitForOffer('KA01CAN001');
+    await waitForOffer('TG09CAN001');
 
     await request(app)
       .post(`/api/emergency/${created.id}/cancel`)
@@ -409,15 +409,15 @@ describe('cancellation', () => {
       .send({ reason: 'Made other arrangements' })
       .expect(200);
 
-    const vehicle = await Ambulance.findOne({ vehicleNumber: 'KA01CAN001' });
+    const vehicle = await Ambulance.findOne({ vehicleNumber: 'TG09CAN001' });
     expect(vehicle?.status).toBe('AVAILABLE');
     expect(vehicle?.activeRequest).toBeNull();
   });
 
   it('stops the caller cancelling once the crew is with them', async () => {
-    const context = await scenario([{ number: 'KA01ONSC01', metresAway: 300 }]);
+    const context = await scenario([{ number: 'TG09ONSC01', metresAway: 300 }]);
     const created = await raiseSos(context.patientToken);
-    await waitForOffer('KA01ONSC01');
+    await waitForOffer('TG09ONSC01');
 
     const driverToken = await login(app, context.crews[0]!.driver.email);
     await request(app)
@@ -444,7 +444,7 @@ describe('cancellation', () => {
 
 describe('case visibility', () => {
   it('hides a case from an unrelated patient', async () => {
-    const { patientToken } = await scenario([{ number: 'KA01PRIV01', metresAway: 400 }]);
+    const { patientToken } = await scenario([{ number: 'TG09PRIV01', metresAway: 400 }]);
     const created = await raiseSos(patientToken);
 
     await createUser({ email: 'nosy@example.com' });
@@ -457,9 +457,9 @@ describe('case visibility', () => {
   });
 
   it('shows the case to the crew it was offered to', async () => {
-    const context = await scenario([{ number: 'KA01SEE001', metresAway: 400 }]);
+    const context = await scenario([{ number: 'TG09SEE001', metresAway: 400 }]);
     const created = await raiseSos(context.patientToken);
-    await waitForOffer('KA01SEE001');
+    await waitForOffer('TG09SEE001');
 
     const driverToken = await login(app, context.crews[0]!.driver.email);
     const response = await request(app)
@@ -471,7 +471,7 @@ describe('case visibility', () => {
   });
 
   it('lets the control room see every open case', async () => {
-    const { patientToken } = await scenario([{ number: 'KA01ADM001', metresAway: 400 }]);
+    const { patientToken } = await scenario([{ number: 'TG09ADM001', metresAway: 400 }]);
     await raiseSos(patientToken);
 
     await createUser({ email: 'control@example.com', role: 'admin' });
@@ -488,7 +488,7 @@ describe('case visibility', () => {
 
 describe('live tracking', () => {
   it('accepts a position ping and rejects an impossible one', async () => {
-    const context = await scenario([{ number: 'KA01GPS001', metresAway: 400 }]);
+    const context = await scenario([{ number: 'TG09GPS001', metresAway: 400 }]);
     const driverToken = await login(app, context.crews[0]!.driver.email);
 
     const moved = offset(CENTRE, 900, 200);
@@ -498,7 +498,7 @@ describe('live tracking', () => {
       .send({ lat: moved.lat, lng: moved.lng, speed: 12 })
       .expect(200);
 
-    const vehicle = await Ambulance.findOne({ vehicleNumber: 'KA01GPS001' });
+    const vehicle = await Ambulance.findOne({ vehicleNumber: 'TG09GPS001' });
     expect(vehicle?.location.coordinates[1]).toBeCloseTo(moved.lat, 4);
 
     // Out-of-range coordinates are refused by validation, not stored.
@@ -510,9 +510,9 @@ describe('live tracking', () => {
   });
 
   it('will not let a crew go off duty during a live case', async () => {
-    const context = await scenario([{ number: 'KA01DUTY01', metresAway: 300 }]);
+    const context = await scenario([{ number: 'TG09DUTY01', metresAway: 300 }]);
     const created = await raiseSos(context.patientToken);
-    await waitForOffer('KA01DUTY01');
+    await waitForOffer('TG09DUTY01');
 
     const driverToken = await login(app, context.crews[0]!.driver.email);
     await request(app)
@@ -532,8 +532,8 @@ describe('live tracking', () => {
 describe('control-room reporting', () => {
   it('summarises the fleet and the day without loading documents', async () => {
     const { patientToken } = await scenario([
-      { number: 'KA01RPT001', metresAway: 400 },
-      { number: 'KA01RPT002', metresAway: 900 },
+      { number: 'TG09RPT001', metresAway: 400 },
+      { number: 'TG09RPT002', metresAway: 900 },
     ]);
     await raiseSos(patientToken);
 
@@ -556,7 +556,7 @@ describe('control-room reporting', () => {
   });
 
   it('returns an hourly series for the last day', async () => {
-    const { patientToken } = await scenario([{ number: 'KA01TS0001', metresAway: 400 }]);
+    const { patientToken } = await scenario([{ number: 'TG09TS0001', metresAway: 400 }]);
     await raiseSos(patientToken);
 
     await createUser({ email: 'series@example.com', role: 'admin' });
@@ -573,7 +573,7 @@ describe('control-room reporting', () => {
   });
 
   it('lists hospitals near a point, nearest first', async () => {
-    const { patientToken } = await scenario([{ number: 'KA01HOS001', metresAway: 400 }]);
+    const { patientToken } = await scenario([{ number: 'TG09HOS001', metresAway: 400 }]);
     await createHospital(offset(CENTRE, 9000, 0), { name: 'Far Hospital' });
 
     const response = await request(app)

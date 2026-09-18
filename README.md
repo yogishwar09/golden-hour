@@ -32,6 +32,13 @@ npm run seed     # creates hospitals, a fleet and demo accounts
 npm run dev      # API on :4000, web on :5173
 ```
 
+The seed data covers **Hyderabad**: nine real hospitals from Osmania General and
+Gandhi to NIMS, Apollo Jubilee Hills and AIG Gachibowli, with a ten-vehicle
+fleet spread from the old city to Secunderabad and the western IT corridor.
+Map tiles are global OpenStreetMap, so serving a different city is a matter of
+editing `backend/src/scripts/seed.ts` and the default centre in
+`frontend/src/components/MapView.tsx`.
+
 Open <http://localhost:5173>.
 
 In a third terminal, bring the fleet to life:
@@ -257,7 +264,8 @@ cannot receive a fleet-wide broadcast.
 The default local stack needs no external services. For a real deployment:
 
 **1. Database.** Create a free MongoDB Atlas cluster, allow your server's IP,
-and set `MONGO_URI`.
+and set `MONGO_URI`. Choose a region near your users — for Hyderabad, Atlas's
+Mumbai region keeps dispatch queries fast.
 
 **2. API.** `render.yaml` deploys it to Render as-is. Set `MONGO_URI` and
 `CORS_ORIGINS` in the dashboard; `JWT_SECRET` is generated for you. The service

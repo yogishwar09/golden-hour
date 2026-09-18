@@ -55,10 +55,10 @@ describe('vehicle capability matching', () => {
 
 describe('geometry', () => {
   it('measures a known distance accurately', () => {
-    // Bengaluru city centre to Indiranagar, roughly 5 km apart.
-    const metres = haversineMetres({ lat: 12.9716, lng: 77.5946 }, { lat: 12.9784, lng: 77.6408 });
-    expect(metres).toBeGreaterThan(4800);
-    expect(metres).toBeLessThan(5400);
+    // Charminar to Secunderabad railway station, about 8.6 km apart.
+    const metres = haversineMetres({ lat: 17.3616, lng: 78.4747 }, { lat: 17.4344, lng: 78.5013 });
+    expect(metres).toBeGreaterThan(8300);
+    expect(metres).toBeLessThan(8900);
   });
 
   it('returns zero for a point measured against itself', () => {
@@ -74,7 +74,7 @@ describe('geometry', () => {
   });
 });
 
-const CENTRE_POINT = { lat: 12.9716, lng: 77.5946 };
+const CENTRE_POINT = { lat: 17.385, lng: 78.4867 };
 
 describe('routing fallback', () => {
   it('decodes a known polyline', () => {
@@ -87,13 +87,13 @@ describe('routing fallback', () => {
   });
 
   it('produces a usable estimate without a routing server', () => {
-    const route = straightLineRoute({ lat: 12.97, lng: 77.59 }, { lat: 12.99, lng: 77.62 });
+    const route = straightLineRoute({ lat: 17.38, lng: 78.48 }, { lat: 17.44, lng: 78.5 });
     expect(route.source).toBe('straight-line');
     expect(route.distanceMetres).toBeGreaterThan(0);
     expect(route.durationSeconds).toBeGreaterThan(0);
     // The detour factor means road distance always exceeds the direct line.
     expect(route.distanceMetres).toBeGreaterThan(
-      haversineMetres({ lat: 12.97, lng: 77.59 }, { lat: 12.99, lng: 77.62 }),
+      haversineMetres({ lat: 17.38, lng: 78.48 }, { lat: 17.44, lng: 78.5 }),
     );
   });
 

@@ -123,7 +123,7 @@ class SimulatedCrew {
       { token: this.token },
     );
     this.vehicleNumber = shift.ambulance.vehicleNumber;
-    this.position = shift.ambulance.location ?? { lat: 12.9716, lng: 77.5946 };
+    this.position = shift.ambulance.location ?? { lat: 17.385, lng: 78.4867 };
     this.base = { ...this.position };
 
     if (shift.ambulance.status === 'OFFLINE') {

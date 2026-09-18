@@ -42,7 +42,8 @@ export interface MapViewProps {
   interactive?: boolean;
 }
 
-const DEFAULT_CENTRE: LatLng = { lat: 12.9716, lng: 77.5946 };
+/** Hyderabad, the city this deployment serves. */
+const DEFAULT_CENTRE: LatLng = { lat: 17.385, lng: 78.4867 };
 
 /**
  * Keeps everything that matters in view.

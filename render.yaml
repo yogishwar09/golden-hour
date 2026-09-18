@@ -5,6 +5,8 @@ services:
     name: smart-ambulance-api
     runtime: node
     plan: free
+    # Singapore is Render's closest region to India; latency matters because
+    # every dispatch decision is a round trip to this service.
     region: singapore
     buildCommand: npm ci && npm run build:shared && npm run build --workspace @sas/backend
     startCommand: node backend/dist/server.js

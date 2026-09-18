@@ -46,17 +46,42 @@ function isPortInUse(port: number, host: string): Promise<boolean> {
   });
 }
 
-async function resolveLocalUri(): Promise<string> {
-  const uri = `mongodb://${LOCAL_HOST}:${LOCAL_PORT}/${env.MONGO_DB_NAME}`;
-
-  if (await isPortInUse(LOCAL_PORT, LOCAL_HOST)) {
-    logger.info('Using the local development MongoDB already running on port %d', LOCAL_PORT);
-    return uri;
+/**
+ * Waits for the local port to become free.
+ *
+ * A MongoDB that is shutting down still holds its port for a moment. Starting a
+ * replacement before it lets go fails to bind, so we give the old one a chance
+ * to finish before taking over.
+ */
+async function waitForPortFree(port: number, host: string, timeoutMs = 8000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!(await isPortInUse(port, host))) return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
   }
+}
 
-  logger.warn(
-    'MONGO_URI is not set - starting a local development MongoDB (data is kept in backend/.local-db).',
-  );
+const CONNECT_OPTIONS = {
+  dbName: env.MONGO_DB_NAME,
+  // Fail fast rather than queueing requests behind an unreachable cluster.
+  serverSelectionTimeoutMS: 10_000,
+  maxPoolSize: 20,
+  retryWrites: true,
+} as const;
+
+/** Attempts a connection, reporting failure instead of throwing. */
+async function tryConnect(uri: string): Promise<boolean> {
+  try {
+    await mongoose.connect(uri, CONNECT_OPTIONS);
+    return true;
+  } catch (error) {
+    logger.debug({ err: error }, 'Connection attempt failed');
+    return false;
+  }
+}
+
+/** Starts a MongoDB this process owns, storing its data under `.local-db`. */
+async function startManagedMongo(): Promise<string> {
   await mkdir(LOCAL_DB_PATH, { recursive: true });
 
   // Imported lazily: this is a dev dependency and is never present in a
@@ -97,29 +122,59 @@ export function configureMongoose(): void {
   mongoose.set('strictQuery', true);
 }
 
-export async function connectDatabase(): Promise<typeof mongoose> {
-  const uri = env.MONGO_URI ?? (await resolveLocalUri());
-
-  configureMongoose();
-
+function attachConnectionListeners(): void {
   mongoose.connection.on('connected', () => logger.info('MongoDB connected'));
   mongoose.connection.on('disconnected', () => logger.warn('MongoDB disconnected'));
   mongoose.connection.on('error', (error) => logger.error({ err: error }, 'MongoDB error'));
+}
 
-  await mongoose.connect(uri, {
-    dbName: env.MONGO_DB_NAME,
-    // Fail fast rather than queueing requests behind an unreachable cluster.
-    serverSelectionTimeoutMS: 10_000,
-    maxPoolSize: 20,
-    retryWrites: true,
-  });
-
-  // Geospatial dispatch is only correct once the 2dsphere indexes exist, so
-  // build them before the server starts accepting traffic.
+/**
+ * Geospatial dispatch is only correct once the 2dsphere indexes exist, so they
+ * are built before the server starts accepting traffic.
+ */
+async function syncIndexes(): Promise<void> {
   await mongoose.connection.syncIndexes({ continueOnError: true }).catch((error: unknown) => {
     logger.warn({ err: error }, 'Index sync reported a problem');
   });
+}
 
+export async function connectDatabase(): Promise<typeof mongoose> {
+  configureMongoose();
+  attachConnectionListeners();
+
+  // Production and any explicitly configured database: connect or fail loudly.
+  // There is deliberately no fallback here -- silently starting a throwaway
+  // database when Atlas is unreachable would hide a real outage behind an
+  // empty, working-looking API.
+  if (env.MONGO_URI) {
+    await mongoose.connect(env.MONGO_URI, CONNECT_OPTIONS);
+    await syncIndexes();
+    return mongoose;
+  }
+
+  const localUri = `mongodb://${LOCAL_HOST}:${LOCAL_PORT}/${env.MONGO_DB_NAME}`;
+
+  // Prefer a local MongoDB that is already running -- that is what lets the
+  // seed script and the dev server share one database. But an open port is not
+  // proof of a working server: it may be one that is shutting down. So the
+  // connection is verified, and we start our own if it does not hold up.
+  if (await isPortInUse(LOCAL_PORT, LOCAL_HOST)) {
+    if (await tryConnect(localUri)) {
+      logger.info(`Using the local development MongoDB already running on port ${LOCAL_PORT}`);
+      await syncIndexes();
+      return mongoose;
+    }
+    logger.warn(
+      `Port ${LOCAL_PORT} was open but MongoDB did not respond; waiting for it to release the port.`,
+    );
+    await waitForPortFree(LOCAL_PORT, LOCAL_HOST);
+  }
+
+  logger.warn(
+    'MONGO_URI is not set - starting a local development MongoDB (data is kept in backend/.local-db).',
+  );
+  await mongoose.connect(await startManagedMongo(), CONNECT_OPTIONS);
+  await syncIndexes();
   return mongoose;
 }
 
