@@ -23,10 +23,13 @@
     "test": "npm run build:shared && npm run test --workspace @sas/backend",
     "test:watch": "npm run test:watch --workspace @sas/backend",
     "lint": "npm run lint --workspaces --if-present",
-    "typecheck": "npm run build:shared && npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run build:shared && npm run typecheck --workspaces --if-present",
+    "format": "prettier --write \"**/*.{ts,tsx,json}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,json}\""
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
+    "prettier": "^3.9.8",
     "typescript": "^5.7.3"
   }
 }

@@ -1,5 +1,10 @@
 import { Router } from 'express';
-import { advanceStatusSchema, locationPingSchema, offerResponseSchema, setDutyStatusSchema } from '@sas/shared';
+import {
+  advanceStatusSchema,
+  locationPingSchema,
+  offerResponseSchema,
+  setDutyStatusSchema,
+} from '@sas/shared';
 import { validate } from '../middleware/validate.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import {

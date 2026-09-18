@@ -1,0 +1,156 @@
+###############################################################################
+# API scratchpad for the REST Client extension (humao.rest-client).
+#
+# Click "Send Request" above any block. Run the login first -- the later
+# requests reuse its token automatically via the @token variable.
+#
+# Start the stack first:  npm run dev
+###############################################################################
+
+@host = http://localhost:4000
+@password = Password123
+
+### Health ---------------------------------------------------------------
+GET {{host}}/api/health
+
+### Readiness (checks the database too)
+GET {{host}}/api/ready
+
+### Sign in as the patient -------------------------------------------------
+# @name login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "patient@demo.test",
+  "password": "{{password}}"
+}
+
+### Everything below reuses the token from that response.
+@token = {{login.response.body.accessToken}}
+
+### Who am I?
+GET {{host}}/api/auth/me
+Authorization: Bearer {{token}}
+
+### Raise an emergency -----------------------------------------------------
+# Charminar, Hyderabad. Cardiac + unconscious triages to P1 and needs an ALS
+# vehicle at minimum; watch the control room react in real time.
+# @name sos
+POST {{host}}/api/emergency
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "emergencyType": "CARDIAC",
+  "pickup": { "lat": 17.3616, "lng": 78.4747 },
+  "pickupAddress": "Charminar, Old City, Hyderabad",
+  "notes": "Chest pain, sweating",
+  "vitals": { "conscious": false, "breathing": true }
+}
+
+### The caller's currently open case
+GET {{host}}/api/emergency/active
+Authorization: Bearer {{token}}
+
+### One case by id
+@requestId = {{sos.response.body.request.id}}
+GET {{host}}/api/emergency/{{requestId}}
+Authorization: Bearer {{token}}
+
+### Cancel it
+POST {{host}}/api/emergency/{{requestId}}/cancel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "reason": "No longer needed" }
+
+### Case history
+GET {{host}}/api/emergency/mine?page=1&limit=10
+Authorization: Bearer {{token}}
+
+### Ambulances near a point ------------------------------------------------
+GET {{host}}/api/ambulances/nearby?lat=17.385&lng=78.4867&radiusKm=12
+Authorization: Bearer {{token}}
+
+### Hospitals near a point
+GET {{host}}/api/hospitals/nearby?lat=17.385&lng=78.4867&radiusKm=20
+Authorization: Bearer {{token}}
+
+### Control room -----------------------------------------------------------
+# @name adminLogin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@demo.test",
+  "password": "{{password}}"
+}
+
+###
+@adminToken = {{adminLogin.response.body.accessToken}}
+
+### Fleet and day-to-date figures
+GET {{host}}/api/admin/stats
+Authorization: Bearer {{adminToken}}
+
+### Every open case
+GET {{host}}/api/admin/requests/active
+Authorization: Bearer {{adminToken}}
+
+### Hourly volume, last 24 hours
+GET {{host}}/api/admin/timeseries
+Authorization: Bearer {{adminToken}}
+
+### The audit trail
+GET {{host}}/api/admin/audit?page=1&limit=20
+Authorization: Bearer {{adminToken}}
+
+### The whole fleet
+GET {{host}}/api/ambulances
+Authorization: Bearer {{adminToken}}
+
+### Crew -------------------------------------------------------------------
+# @name driverLogin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "driver@demo.test",
+  "password": "{{password}}"
+}
+
+###
+@driverToken = {{driverLogin.response.body.accessToken}}
+
+### This crew's vehicle and live case
+GET {{host}}/api/driver/shift
+Authorization: Bearer {{driverToken}}
+
+### Go on duty
+POST {{host}}/api/driver/duty
+Authorization: Bearer {{driverToken}}
+Content-Type: application/json
+
+{ "status": "AVAILABLE" }
+
+### Error handling ---------------------------------------------------------
+### A body that is not valid JSON -> 400
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "email": broken
+
+### No token -> 401
+GET {{host}}/api/auth/me
+
+### A patient reaching for control-room data -> 403
+GET {{host}}/api/admin/stats
+Authorization: Bearer {{token}}
+
+### Coordinates that are not on the planet -> 400
+POST {{host}}/api/emergency
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "emergencyType": "CARDIAC", "pickup": { "lat": 999, "lng": 78 } }

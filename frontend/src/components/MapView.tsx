@@ -67,7 +67,9 @@ function AutoFit({ points }: { points: LatLng[] }) {
       return;
     }
 
-    const bounds = L.latLngBounds(points.map((point) => [point.lat, point.lng] as [number, number]));
+    const bounds = L.latLngBounds(
+      points.map((point) => [point.lat, point.lng] as [number, number]),
+    );
     map.fitBounds(bounds, { padding: [56, 56], maxZoom: 16, animate: true });
   }, [map, signature, points]);
 

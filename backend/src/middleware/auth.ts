@@ -55,17 +55,19 @@ function extractToken(req: Request): string | null {
   return token.length > 0 ? token : null;
 }
 
-export const requireAuth = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
-  const token = extractToken(req);
-  if (!token) throw ApiError.unauthorized('Sign in to continue');
+export const requireAuth = asyncHandler(
+  async (req: Request, _res: Response, next: NextFunction) => {
+    const token = extractToken(req);
+    if (!token) throw ApiError.unauthorized('Sign in to continue');
 
-  const payload = verifyAccessToken(token);
-  const user = await User.findById(payload.sub);
-  if (!user || !user.isActive) throw ApiError.unauthorized('This account is no longer active');
+    const payload = verifyAccessToken(token);
+    const user = await User.findById(payload.sub);
+    if (!user || !user.isActive) throw ApiError.unauthorized('This account is no longer active');
 
-  req.user = user;
-  next();
-});
+    req.user = user;
+    next();
+  },
+);
 
 /** Attaches the user when a token is present, but never rejects. */
 export const optionalAuth = asyncHandler(

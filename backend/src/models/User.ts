@@ -77,7 +77,12 @@ userSchema.method('toDto', function toDto(): UserDto {
     role: this.role,
     bloodGroup: this.bloodGroup,
     ...(this.emergencyContact
-      ? { emergencyContact: { name: this.emergencyContact.name, phone: this.emergencyContact.phone } }
+      ? {
+          emergencyContact: {
+            name: this.emergencyContact.name,
+            phone: this.emergencyContact.phone,
+          },
+        }
       : {}),
     ...(this.medicalNotes ? { medicalNotes: this.medicalNotes } : {}),
     createdAt: this.createdAt.toISOString(),

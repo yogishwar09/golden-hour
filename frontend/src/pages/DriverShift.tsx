@@ -47,12 +47,7 @@ import {
   SectionTitle,
   Spinner,
 } from '../components/ui';
-import {
-  AMBULANCE_STATUS_STYLES,
-  formatDistance,
-  formatEta,
-  PRIORITY_STYLES,
-} from '../lib/format';
+import { AMBULANCE_STATUS_STYLES, formatDistance, formatEta, PRIORITY_STYLES } from '../lib/format';
 
 /** The crew's next action at each stage, in order. */
 const NEXT_STEP: Partial<Record<RequestStatus, { status: RequestStatus; label: string }>> = {
@@ -178,21 +173,18 @@ export function DriverShift() {
     [activeCase, loadShift],
   );
 
-  const setDuty = useCallback(
-    async (status: 'AVAILABLE' | 'OFFLINE'): Promise<void> => {
-      setBusy(true);
-      try {
-        const response = await api.post<{ ambulance: AmbulanceDto }>('/driver/duty', { status });
-        setVehicle(response.data.ambulance);
-        toast.success(status === 'AVAILABLE' ? 'You are on duty' : 'You are off duty');
-      } catch (caught) {
-        toast.error(errorMessage(caught));
-      } finally {
-        setBusy(false);
-      }
-    },
-    [],
-  );
+  const setDuty = useCallback(async (status: 'AVAILABLE' | 'OFFLINE'): Promise<void> => {
+    setBusy(true);
+    try {
+      const response = await api.post<{ ambulance: AmbulanceDto }>('/driver/duty', { status });
+      setVehicle(response.data.ambulance);
+      toast.success(status === 'AVAILABLE' ? 'You are on duty' : 'You are off duty');
+    } catch (caught) {
+      toast.error(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
 
   const mapPoints = useMemo(() => {
     const points = [];
@@ -216,8 +208,8 @@ export function DriverShift() {
         <Card className="p-6">
           <ErrorNotice message={error} />
           <p className="mt-4 text-sm text-ink-400">
-            A control-room administrator assigns a vehicle to each crew account. Ask them to add
-            you to an ambulance.
+            A control-room administrator assigns a vehicle to each crew account. Ask them to add you
+            to an ambulance.
           </p>
         </Card>
       </div>
@@ -273,9 +265,7 @@ export function DriverShift() {
                   {geo.position ? `±${Math.round(geo.accuracy ?? 0)} m` : 'Searching'}
                 </span>
               </div>
-              {geo.error && (
-                <p className="mt-2 text-xs text-amber-300">{geo.error}</p>
-              )}
+              {geo.error && <p className="mt-2 text-xs text-amber-300">{geo.error}</p>}
             </div>
           </Card>
         )}
@@ -326,7 +316,11 @@ export function DriverShift() {
                     disabled={busy}
                     className="btn-primary mt-5 w-full py-4 text-base"
                   >
-                    {busy ? <Spinner className="h-5 w-5" /> : <ArrowRight className="h-5 w-5" aria-hidden />}
+                    {busy ? (
+                      <Spinner className="h-5 w-5" />
+                    ) : (
+                      <ArrowRight className="h-5 w-5" aria-hidden />
+                    )}
                     {nextStep.label}
                   </button>
                 )}
@@ -575,7 +569,9 @@ function OfferModal({
  */
 async function playAlert(): Promise<void> {
   try {
-    const AudioCtor = window.AudioContext ?? (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const AudioCtor =
+      window.AudioContext ??
+      (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtor) return;
 
     const context = new AudioCtor();

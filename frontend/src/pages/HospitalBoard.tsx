@@ -19,20 +19,8 @@ import {
 } from '@sas/shared';
 import { api, errorMessage } from '../lib/api';
 import { useSocketEvent } from '../hooks/useSocketEvent';
-import {
-  Card,
-  EmptyState,
-  ErrorNotice,
-  SectionTitle,
-  Skeleton,
-  StatTile,
-} from '../components/ui';
-import {
-  formatEta,
-  formatRelative,
-  PRIORITY_STYLES,
-  REQUEST_STATUS_STYLES,
-} from '../lib/format';
+import { Card, EmptyState, ErrorNotice, SectionTitle, Skeleton, StatTile } from '../components/ui';
+import { formatEta, formatRelative, PRIORITY_STYLES, REQUEST_STATUS_STYLES } from '../lib/format';
 
 /** Cases whose patient is en route to, or has just reached, a hospital. */
 const INBOUND_STATUSES = new Set(['TRANSPORTING', 'ARRIVED_AT_HOSPITAL']);
@@ -228,12 +216,10 @@ export function HospitalBoard() {
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {hospitals.map((hospital) => {
-            const ratio = hospital.beds.total > 0 ? hospital.beds.available / hospital.beds.total : 0;
+            const ratio =
+              hospital.beds.total > 0 ? hospital.beds.available / hospital.beds.total : 0;
             return (
-              <div
-                key={hospital.id}
-                className="rounded-xl border border-ink-700 bg-ink-900/50 p-4"
-              >
+              <div key={hospital.id} className="rounded-xl border border-ink-700 bg-ink-900/50 p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold">{hospital.name}</p>
@@ -279,7 +265,11 @@ export function HospitalBoard() {
                 <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-ink-700">
                   <div
                     className={`h-full rounded-full transition-[width] ${
-                      ratio < 0.1 ? 'bg-emergency-500' : ratio < 0.25 ? 'bg-amber-500' : 'bg-emerald-500'
+                      ratio < 0.1
+                        ? 'bg-emergency-500'
+                        : ratio < 0.25
+                          ? 'bg-amber-500'
+                          : 'bg-emerald-500'
                     }`}
                     style={{ width: `${Math.round(ratio * 100)}%` }}
                   />

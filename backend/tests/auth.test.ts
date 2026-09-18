@@ -44,7 +44,12 @@ describe('registration', () => {
   it('rejects a weak password with a field-level message', async () => {
     const response = await request(app)
       .post('/api/auth/register')
-      .send({ name: 'Weak Pass', email: 'weak@example.com', phone: '+919812345678', password: 'abc' })
+      .send({
+        name: 'Weak Pass',
+        email: 'weak@example.com',
+        phone: '+919812345678',
+        password: 'abc',
+      })
       .expect(400);
 
     expect(response.body.error.code).toBe('BAD_REQUEST');
@@ -55,7 +60,12 @@ describe('registration', () => {
     await createUser({ email: 'dupe@example.com' });
     const response = await request(app)
       .post('/api/auth/register')
-      .send({ name: 'Copy', email: 'dupe@example.com', phone: '+919812345678', password: TEST_PASSWORD })
+      .send({
+        name: 'Copy',
+        email: 'dupe@example.com',
+        phone: '+919812345678',
+        password: TEST_PASSWORD,
+      })
       .expect(409);
 
     expect(response.body.error.code).toBe('CONFLICT');

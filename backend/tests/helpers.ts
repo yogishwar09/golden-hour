@@ -73,7 +73,11 @@ export function testApp(): Express {
 }
 
 /** Moves a point by a number of metres north and east. */
-export function offset(from: { lat: number; lng: number }, metresNorth: number, metresEast: number) {
+export function offset(
+  from: { lat: number; lng: number },
+  metresNorth: number,
+  metresEast: number,
+) {
   const degreesPerMetre = 1 / 111_320;
   return {
     lat: from.lat + metresNorth * degreesPerMetre,

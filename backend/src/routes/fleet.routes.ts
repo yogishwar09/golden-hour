@@ -26,7 +26,12 @@ ambulanceRoutes.use(requireAuth);
 ambulanceRoutes.get('/nearby', validate(nearbyQuerySchema, 'query'), nearbyAmbulances);
 ambulanceRoutes.get('/', requireRole('admin', 'hospital'), listAmbulances);
 ambulanceRoutes.post('/', requireRole('admin'), validate(createAmbulanceSchema), createAmbulance);
-ambulanceRoutes.patch('/:id', requireRole('admin'), validate(updateAmbulanceSchema), updateAmbulance);
+ambulanceRoutes.patch(
+  '/:id',
+  requireRole('admin'),
+  validate(updateAmbulanceSchema),
+  updateAmbulance,
+);
 ambulanceRoutes.delete('/:id', requireRole('admin'), retireAmbulance);
 
 export const hospitalRoutes = Router();

@@ -135,7 +135,8 @@ export async function getRoute(from: LatLng, to: LatLng): Promise<RouteDto> {
 
     const body = (await response.json()) as OsrmResponse;
     const best = body.routes?.[0];
-    if (body.code !== 'Ok' || !best?.geometry) throw new Error(`OSRM code ${body.code ?? 'unknown'}`);
+    if (body.code !== 'Ok' || !best?.geometry)
+      throw new Error(`OSRM code ${body.code ?? 'unknown'}`);
 
     const route: RouteDto = {
       points: decodePolyline(best.geometry),

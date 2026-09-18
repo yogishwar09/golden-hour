@@ -101,13 +101,13 @@ export function History() {
                     </span>
                   </div>
 
-                  <p className="mt-2 font-semibold">
-                    {EMERGENCY_TYPE_LABELS[item.emergencyType]}
-                  </p>
+                  <p className="mt-2 font-semibold">{EMERGENCY_TYPE_LABELS[item.emergencyType]}</p>
 
                   <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-400">
                     <span>{formatDateTime(item.createdAt)}</span>
-                    {item.ambulance && <span className="numeric">{item.ambulance.vehicleNumber}</span>}
+                    {item.ambulance && (
+                      <span className="numeric">{item.ambulance.vehicleNumber}</span>
+                    )}
                     {item.responseSeconds !== null && (
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" aria-hidden />
@@ -127,16 +127,12 @@ export function History() {
                       </p>
                     )}
                     {item.cancellationReason && (
-                      <p className="text-sm text-ink-300">
-                        Cancelled: {item.cancellationReason}
-                      </p>
+                      <p className="text-sm text-ink-300">Cancelled: {item.cancellationReason}</p>
                     )}
 
                     {item.status === 'COMPLETED' && (
                       <div>
-                        <p className="label">
-                          {item.rating ? 'Your rating' : 'How did we do?'}
-                        </p>
+                        <p className="label">{item.rating ? 'Your rating' : 'How did we do?'}</p>
                         <div className="flex gap-1">
                           {[1, 2, 3, 4, 5].map((star) => (
                             <button

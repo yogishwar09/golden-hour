@@ -45,7 +45,9 @@ const OPEN_STATUSES: RequestStatus[] = [
 ];
 
 /** Request status -> the vehicle state it implies. */
-const VEHICLE_STATUS_FOR: Partial<Record<RequestStatus, 'DISPATCHED' | 'ON_SCENE' | 'TRANSPORTING' | 'AT_HOSPITAL' | 'AVAILABLE'>> = {
+const VEHICLE_STATUS_FOR: Partial<
+  Record<RequestStatus, 'DISPATCHED' | 'ON_SCENE' | 'TRANSPORTING' | 'AT_HOSPITAL' | 'AVAILABLE'>
+> = {
   ASSIGNED: 'DISPATCHED',
   EN_ROUTE_TO_SCENE: 'DISPATCHED',
   ON_SCENE: 'ON_SCENE',
@@ -121,7 +123,9 @@ export async function createEmergencyRequest(
   // Remember where the caller was, so a future SOS can prefill instantly.
   await User.updateOne(
     { _id: patient._id },
-    { $set: { lastLocation: { type: 'Point', coordinates: [input.pickup.lng, input.pickup.lat] } } },
+    {
+      $set: { lastLocation: { type: 'Point', coordinates: [input.pickup.lng, input.pickup.lat] } },
+    },
   );
 
   recordAudit({

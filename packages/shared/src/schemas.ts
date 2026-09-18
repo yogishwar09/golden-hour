@@ -21,9 +21,7 @@ export const longitude = z.number().min(-180).max(180);
 export const latLngSchema = z.object({ lat: latitude, lng: longitude });
 export type LatLngInput = z.infer<typeof latLngSchema>;
 
-export const objectIdSchema = z
-  .string()
-  .regex(/^[a-f\d]{24}$/i, 'Must be a 24-character hex id');
+export const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, 'Must be a 24-character hex id');
 
 /** E.164-ish: an optional +, then 8-15 digits. Deliberately permissive. */
 export const phoneSchema = z
@@ -165,7 +163,10 @@ export const createHospitalSchema = z.object({
   traumaLevel: z.number().int().min(1).max(4).default(3),
   specialties: z.array(z.string().trim().max(60)).max(40).default([]),
   beds: z
-    .object({ total: z.number().int().min(0).max(5000), available: z.number().int().min(0).max(5000) })
+    .object({
+      total: z.number().int().min(0).max(5000),
+      available: z.number().int().min(0).max(5000),
+    })
     .default({ total: 0, available: 0 }),
 });
 export type CreateHospitalInput = z.infer<typeof createHospitalSchema>;

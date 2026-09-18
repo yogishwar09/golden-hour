@@ -14,7 +14,13 @@ import type { HospitalDocument } from '../models/Hospital.js';
 
 /** The population set every case DTO needs; used by every read path. */
 export const REQUEST_POPULATION = [
-  { path: 'ambulance', populate: [{ path: 'driver', select: 'name phone' }, { path: 'hospital', select: 'name' }] },
+  {
+    path: 'ambulance',
+    populate: [
+      { path: 'driver', select: 'name phone' },
+      { path: 'hospital', select: 'name' },
+    ],
+  },
   { path: 'hospital' },
 ] as const;
 
@@ -22,9 +28,7 @@ export function serializeRequest(doc: EmergencyRequestDocument): EmergencyReques
   const ambulance = doc.populated('ambulance')
     ? (doc.ambulance as unknown as AmbulanceDocument)
     : null;
-  const hospital = doc.populated('hospital')
-    ? (doc.hospital as unknown as HospitalDocument)
-    : null;
+  const hospital = doc.populated('hospital') ? (doc.hospital as unknown as HospitalDocument) : null;
 
   const timeline: TimelineEventDto[] = doc.timeline.map((entry) => ({
     status: entry.status,

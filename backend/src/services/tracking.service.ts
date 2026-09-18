@@ -97,7 +97,8 @@ export async function recordLocationPing(
 
   // Devices often omit heading when stationary; derive it from the track.
   const heading =
-    ping.heading ?? (previous && haversineMetres(previous, next) > 5
+    ping.heading ??
+    (previous && haversineMetres(previous, next) > 5
       ? bearingDegrees(previous, next)
       : vehicle.heading);
 

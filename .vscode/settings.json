@@ -1,0 +1,49 @@
+{
+  // Use the TypeScript version from node_modules, not the one bundled with
+  // VS Code, so the editor and `npm run typecheck` agree.
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  // Import paths in this project are relative and ESM-style (.js suffix on the
+  // backend); this stops VS Code rewriting them to something that will not run.
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "javascript.preferences.importModuleSpecifier": "relative",
+
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit"
+  },
+
+  // Tailwind IntelliSense inside the class-name helpers used in this codebase.
+  "tailwindCSS.experimental.classRegex": [
+    ["className=\"([^\"]*)", "([a-zA-Z0-9\\-:/\\[\\]\\.%]+)"]
+  ],
+  "tailwindCSS.includeLanguages": { "typescript": "javascript", "typescriptreact": "javascript" },
+
+  // Build output and dependencies are noise in the file tree and in search.
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.local-db": true,
+    "**/*.tsbuildinfo": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/package-lock.json": true,
+    "**/.local-db": true
+  },
+  // Watching the managed database directory would peg a CPU core.
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/dist/**": true,
+    "**/.local-db/**": true
+  },
+
+  "files.eol": "\n",
+  "editor.rulers": [100],
+  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[typescriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[jsonc]": { "editor.defaultFormatter": "esbenp.prettier-vscode" }
+}

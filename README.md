@@ -52,6 +52,52 @@ dispatches, follow road routes to the patient, and complete cases. It is an
 ordinary API client with no special privileges, so anything it does, a real
 crew device can do.
 
+## Running it in VS Code
+
+Open the **repository root** (not `backend/` or `frontend/` on their own — the
+workspaces reference each other):
+
+```bash
+code ~/SmartAmbulance
+```
+
+VS Code will offer the recommended extensions on first open; accept, and you get
+Tailwind autocomplete, Prettier on save, a Testing sidebar wired to Vitest, and
+a MongoDB browser.
+
+**To run everything:** press `Cmd+Shift+B` (`Ctrl+Shift+B` on Windows/Linux).
+That is the default build task, `dev: API + web`. Or open the Command Palette →
+*Tasks: Run Task* and pick one:
+
+| Task | What it does |
+| --- | --- |
+| `dev: API + web` | Both servers with hot reload — the default build task |
+| `seed the database` | Reset to the demo dataset |
+| `run the fleet simulator` | Drive the seeded crews through real cases |
+| `test` | The full suite |
+| `typecheck` / `build everything` | Verify or produce a production build |
+
+**To debug**, press `F5` and pick a configuration from the Run and Debug panel:
+
+| Configuration | Use it for |
+| --- | --- |
+| `Debug API` | Breakpoints anywhere in the backend. Source maps mean you break in `.ts`, not compiled output |
+| `Debug web (Chrome)` | Breakpoints in `.tsx`, with the browser console piped into VS Code. Start the web server first |
+| `Debug full stack` | Both at once |
+| `Debug the open test file` | Steps through whichever test file is focused |
+| `Seed the database` / `Run the fleet simulator` | The scripts, under the debugger |
+
+A good first breakpoint: `offerToCandidate` in
+[`dispatch.service.ts`](backend/src/services/dispatch.service.ts) — press SOS in
+the browser and watch the dispatcher pick a vehicle.
+
+**To poke the API without leaving the editor**, open
+[`requests.http`](requests.http) and click *Send Request* above any block (needs
+the REST Client extension). Sign in first; the later requests reuse the token.
+
+**To browse the data**, open the MongoDB panel in the sidebar and connect to
+`mongodb://127.0.0.1:27017` — the collections are under `smart_ambulance`.
+
 ### Demo accounts
 
 All use the password `Password123`.

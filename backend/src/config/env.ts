@@ -31,7 +31,11 @@ const envSchema = z.object({
 
   JWT_SECRET: z.string().min(16).default(DEV_JWT_SECRET),
   /** Access-token lifetime in seconds. */
-  JWT_TTL_SECONDS: z.coerce.number().int().min(300).default(60 * 60 * 12),
+  JWT_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(300)
+    .default(60 * 60 * 12),
 
   /** Comma-separated list of browser origins allowed to call the API. */
   CORS_ORIGINS: z.string().default('http://localhost:5173,http://127.0.0.1:5173'),

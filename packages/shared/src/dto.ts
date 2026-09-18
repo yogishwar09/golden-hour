@@ -92,7 +92,13 @@ export interface EmergencyRequestDto {
   pickupAddress?: string;
   notes?: string;
   contactPhone?: string;
-  patient: { id: string; name: string; phone: string; bloodGroup: BloodGroup; medicalNotes?: string };
+  patient: {
+    id: string;
+    name: string;
+    phone: string;
+    bloodGroup: BloodGroup;
+    medicalNotes?: string;
+  };
   ambulance?: AmbulanceDto | null;
   hospital?: HospitalDto | null;
   /** Live route from the ambulance to its current objective. */

@@ -1,0 +1,21 @@
+{
+  // VS Code offers these when the project is first opened.
+  "recommendations": [
+    // Tailwind class autocomplete and colour previews in the front end.
+    "bradlc.vscode-tailwindcss",
+    // Formatting, wired to .prettierrc so everyone's saves match.
+    "esbenp.prettier-vscode",
+    // React snippets (rafce, useState, ...).
+    "dsznajder.es7-react-js-snippets",
+    // Run and debug the Vitest suite from the Testing sidebar.
+    "vitest.explorer",
+    // Browse the MongoDB this project uses, straight from the editor.
+    "mongodb.mongodb-vscode",
+    // Blame annotations and history.
+    "eamodio.gitlens",
+    // File icons that make a monorepo easier to scan.
+    "pkief.material-icon-theme",
+    // Send requests to the API from a .http file (see requests.http).
+    "humao.rest-client"
+  ]
+}

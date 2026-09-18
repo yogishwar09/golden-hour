@@ -1,0 +1,93 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Breakpoints in any backend .ts file work directly -- tsx emits source
+      // maps, so there is no build step between you and the debugger.
+      "name": "Debug API",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/tsx",
+      "runtimeArgs": ["watch"],
+      "program": "${workspaceFolder}/backend/src/server.ts",
+      "cwd": "${workspaceFolder}/backend",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"],
+      "env": { "NODE_ENV": "development" }
+    },
+    {
+      // Attach to an API already started with `npm run dev`.
+      // Start it with: NODE_OPTIONS=--inspect npm run dev
+      "name": "Attach to running API",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "restart": true,
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "Debug the open test file",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/vitest",
+      // The absolute path, not ${relativeFile}: that is relative to the
+      // workspace root while this runs from backend/, so the filter would
+      // match nothing.
+      "runtimeArgs": ["run", "${file}"],
+      "cwd": "${workspaceFolder}/backend",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "Debug all tests",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/vitest",
+      "runtimeArgs": ["run"],
+      "cwd": "${workspaceFolder}/backend",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      // Debug React in Chrome: breakpoints in .tsx files, React DevTools, the
+      // console piped into VS Code. Needs the web server already running.
+      "name": "Debug web (Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend/src",
+      "sourceMapPathOverrides": {
+        "/@fs/*": "/*",
+        "/src/*": "${workspaceFolder}/frontend/src/*"
+      }
+    },
+    {
+      "name": "Seed the database",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/tsx",
+      "program": "${workspaceFolder}/backend/src/scripts/seed.ts",
+      "cwd": "${workspaceFolder}/backend",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Run the fleet simulator",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/tsx",
+      "program": "${workspaceFolder}/backend/src/scripts/simulate.ts",
+      "args": ["--speed", "8"],
+      "cwd": "${workspaceFolder}/backend",
+      "console": "integratedTerminal"
+    }
+  ],
+  "compounds": [
+    {
+      // One click: API under the debugger, plus Chrome attached to the web app.
+      // Start the web server first (Ctrl+Shift+B, or the "web" task).
+      "name": "Debug full stack",
+      "configurations": ["Debug API", "Debug web (Chrome)"],
+      "stopAll": true
+    }
+  ]
+}

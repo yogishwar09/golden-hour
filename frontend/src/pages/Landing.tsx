@@ -1,6 +1,15 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Activity, Ambulance, Building2, Clock, MapPin, ShieldCheck, Siren, Zap } from 'lucide-react';
+import {
+  Activity,
+  Ambulance,
+  Building2,
+  Clock,
+  MapPin,
+  ShieldCheck,
+  Siren,
+  Zap,
+} from 'lucide-react';
 
 const FEATURES = [
   {
@@ -36,10 +45,22 @@ const FEATURES = [
 ];
 
 const FLOW = [
-  { step: '01', title: 'Press SOS', body: 'Your location and profile go to the dispatcher instantly.' },
-  { step: '02', title: 'Nearest crew offered', body: 'The best-placed capable vehicle gets the case; no answer, next crew.' },
+  {
+    step: '01',
+    title: 'Press SOS',
+    body: 'Your location and profile go to the dispatcher instantly.',
+  },
+  {
+    step: '02',
+    title: 'Nearest crew offered',
+    body: 'The best-placed capable vehicle gets the case; no answer, next crew.',
+  },
   { step: '03', title: 'Track live', body: 'Follow the ambulance on the map with a live ETA.' },
-  { step: '04', title: 'Handover', body: 'The crew transports you to a hospital expecting your arrival.' },
+  {
+    step: '04',
+    title: 'Handover',
+    body: 'The crew transports you to a hospital expecting your arrival.',
+  },
 ];
 
 export function Landing() {

@@ -313,7 +313,11 @@ async function offerToCandidate(
   scheduleOfferTimeout(request._id.toString(), claimed._id.toString());
 
   logger.info(
-    { requestId: request._id.toString(), vehicle: claimed.vehicleNumber, eta: candidate.etaSeconds },
+    {
+      requestId: request._id.toString(),
+      vehicle: claimed.vehicleNumber,
+      eta: candidate.etaSeconds,
+    },
     'Offered case to crew',
   );
   return true;

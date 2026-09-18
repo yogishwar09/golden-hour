@@ -21,13 +21,22 @@ import { verifyAccessToken } from '../middleware/auth.js';
 import { Ambulance, EmergencyRequest, User, type UserDocument } from '../models/index.js';
 import { recordLocationPing } from '../services/tracking.service.js';
 import { sameId } from '../utils/ids.js';
-import { registerSocketServer, clearSocketServer, type AppServer } from '../services/realtime.service.js';
+import {
+  registerSocketServer,
+  clearSocketServer,
+  type AppServer,
+} from '../services/realtime.service.js';
 
 interface SocketData {
   user: UserDocument;
 }
 
-type AppSocket = Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>;
+type AppSocket = Socket<
+  ClientToServerEvents,
+  ServerToClientEvents,
+  Record<string, never>,
+  SocketData
+>;
 
 /** Crew devices ping often; this caps how much one socket can send. */
 const LOCATION_MIN_INTERVAL_MS = 900;
@@ -117,10 +126,7 @@ async function onConnection(socket: AppSocket): Promise<void> {
   });
 }
 
-async function handleLocation(
-  socket: AppSocket,
-  payload: unknown,
-): Promise<void> {
+async function handleLocation(socket: AppSocket, payload: unknown): Promise<void> {
   const user = socket.data.user;
   if (user.role !== 'driver') {
     socket.emit('server:error', { code: 'FORBIDDEN', message: 'Only crews report position' });
@@ -191,7 +197,10 @@ async function sendFleetSnapshot(socket: AppSocket): Promise<void> {
   const vehicles = await Ambulance.find({ isActive: true })
     .populate('driver', 'name phone')
     .populate('hospital', 'name');
-  socket.emit('fleet:snapshot', vehicles.map((vehicle) => vehicle.toDto()));
+  socket.emit(
+    'fleet:snapshot',
+    vehicles.map((vehicle) => vehicle.toDto()),
+  );
 }
 
 export async function closeSocketServer(io: AppServer): Promise<void> {

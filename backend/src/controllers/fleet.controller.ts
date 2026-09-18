@@ -71,7 +71,10 @@ export const createAmbulance = asyncHandler(async (req: Request, res: Response) 
     throw ApiError.conflict(`That driver already crews ${alreadyCrewing.vehicleNumber}`);
   }
 
-  const point = { type: 'Point' as const, coordinates: [input.baseLocation.lng, input.baseLocation.lat] as [number, number] };
+  const point = {
+    type: 'Point' as const,
+    coordinates: [input.baseLocation.lng, input.baseLocation.lat] as [number, number],
+  };
   const vehicle = await Ambulance.create({
     vehicleNumber: input.vehicleNumber,
     type: input.type,
@@ -114,7 +117,9 @@ export const updateAmbulance = asyncHandler(async (req: Request, res: Response) 
   }>;
 
   if (input.status && vehicle.activeRequest && input.status !== vehicle.status) {
-    throw ApiError.conflict('This vehicle is on a live case; close the case before changing status');
+    throw ApiError.conflict(
+      'This vehicle is on a live case; close the case before changing status',
+    );
   }
 
   if (input.type) vehicle.type = input.type;

@@ -67,7 +67,11 @@ export interface ServerToClientEvents {
   /** The offer window closed or the case went elsewhere; clear the prompt. */
   'dispatch:offer_revoked': (payload: { requestId: string; reason: string }) => void;
   'ambulance:position': (payload: AmbulancePositionEvent) => void;
-  'ambulance:status': (payload: { ambulanceId: string; status: AmbulanceStatus; at: string }) => void;
+  'ambulance:status': (payload: {
+    ambulanceId: string;
+    status: AmbulanceStatus;
+    at: string;
+  }) => void;
   'fleet:snapshot': (payload: AmbulanceDto[]) => void;
   notification: (payload: NotificationEvent) => void;
   'server:error': (payload: { code: string; message: string }) => void;

@@ -5,7 +5,11 @@
 
 import { describe, expect, it } from 'vitest';
 import { haversineMetres, bearingDegrees, triage, vehicleMeets, escalate } from '@sas/shared';
-import { decodePolyline, straightLineRoute, applyEmergencyFactor } from '../src/services/routing.service.js';
+import {
+  decodePolyline,
+  straightLineRoute,
+  applyEmergencyFactor,
+} from '../src/services/routing.service.js';
 
 describe('triage', () => {
   it('treats a cardiac call as immediate and sends an advanced vehicle', () => {

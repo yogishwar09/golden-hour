@@ -62,7 +62,11 @@ export function PatientSOS() {
 
   const [emergencyType, setEmergencyType] = useState<EmergencyType>('OTHER');
   const [notes, setNotes] = useState('');
-  const [vitals, setVitals] = useState({ conscious: true, breathing: true, bleedingSeverely: false });
+  const [vitals, setVitals] = useState({
+    conscious: true,
+    breathing: true,
+    bleedingSeverely: false,
+  });
   const [confirming, setConfirming] = useState(false);
 
   const [nearby, setNearby] = useState<AmbulanceDto[]>([]);
@@ -201,9 +205,7 @@ export function PatientSOS() {
       <div className="space-y-5">
         <Card className="overflow-hidden">
           <div className="border-b border-ink-700 bg-gradient-to-br from-emergency-950/40 to-transparent px-6 py-5">
-            <h1 className="text-xl font-bold tracking-tight">
-              Hello, {user?.name.split(' ')[0]}
-            </h1>
+            <h1 className="text-xl font-bold tracking-tight">Hello, {user?.name.split(' ')[0]}</h1>
             <p className="mt-0.5 text-sm text-ink-400">
               Press the button and stay on this screen. Help is dispatched automatically.
             </p>
@@ -442,13 +444,7 @@ function ConfirmDialog({
 }
 
 /** The live-tracking view, shown while a case is running. */
-function LiveCase({
-  caseData,
-  onCancel,
-}: {
-  caseData: EmergencyRequestDto;
-  onCancel: () => void;
-}) {
+function LiveCase({ caseData, onCancel }: { caseData: EmergencyRequestDto; onCancel: () => void }) {
   const heading = caseData.status === 'TRANSPORTING' ? 'toHospital' : 'toScene';
   const crewIsWithPatient = ['ON_SCENE', 'TRANSPORTING', 'ARRIVED_AT_HOSPITAL'].includes(
     caseData.status,
@@ -491,7 +487,9 @@ function LiveCase({
             ) : caseData.status === 'NO_AMBULANCE_AVAILABLE' ? (
               <>
                 <AlertTriangle className="mx-auto h-8 w-8 text-emergency-400" aria-hidden />
-                <p className="mt-3 text-base font-bold text-emergency-300">No ambulance available</p>
+                <p className="mt-3 text-base font-bold text-emergency-300">
+                  No ambulance available
+                </p>
                 <p className="mt-1 text-sm text-ink-400">
                   Please call your local emergency number immediately.
                 </p>

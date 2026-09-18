@@ -287,7 +287,9 @@ export function ControlRoom() {
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <span className={`chip ${PRIORITY_STYLES[item.priority]}`}>{item.priority}</span>
+                    <span className={`chip ${PRIORITY_STYLES[item.priority]}`}>
+                      {item.priority}
+                    </span>
                     <span className="numeric text-xs font-semibold text-ink-300">{item.code}</span>
                     <span className={`chip ml-auto ${REQUEST_STATUS_STYLES[item.status]}`}>
                       {REQUEST_STATUS_LABELS[item.status]}
@@ -332,8 +334,20 @@ export function ControlRoom() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e2331" vertical={false} />
-                  <XAxis dataKey="label" stroke="#5b6478" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#5b6478" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <XAxis
+                    dataKey="label"
+                    stroke="#5b6478"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    stroke="#5b6478"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                  />
                   <Tooltip
                     contentStyle={{
                       background: '#11141c',
@@ -378,7 +392,14 @@ export function ControlRoom() {
                   margin={{ top: 0, right: 12, left: 0, bottom: 0 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e2331" horizontal={false} />
-                  <XAxis type="number" stroke="#5b6478" fontSize={11} allowDecimals={false} tickLine={false} axisLine={false} />
+                  <XAxis
+                    type="number"
+                    stroke="#5b6478"
+                    fontSize={11}
+                    allowDecimals={false}
+                    tickLine={false}
+                    axisLine={false}
+                  />
                   <YAxis
                     type="category"
                     dataKey="status"
@@ -500,7 +521,10 @@ export function FleetRoster() {
               </thead>
               <tbody>
                 {fleet.map((vehicle) => (
-                  <tr key={vehicle.id} className="border-b border-ink-800 last:border-0 hover:bg-ink-800/40">
+                  <tr
+                    key={vehicle.id}
+                    className="border-b border-ink-800 last:border-0 hover:bg-ink-800/40"
+                  >
                     <td className="numeric px-5 py-3 font-semibold">{vehicle.vehicleNumber}</td>
                     <td className="px-5 py-3 text-ink-300">{vehicle.type}</td>
                     <td className="px-5 py-3">

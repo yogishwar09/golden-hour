@@ -164,7 +164,9 @@ async function resolveAndConnect(): Promise<'configured' | 'local' | 'managed'> 
       logger.info(`Using the managed development MongoDB on port ${MANAGED_PORT}`);
       return 'managed';
     }
-    logger.warn(`Port ${MANAGED_PORT} was open but MongoDB did not answer; waiting for it to close.`);
+    logger.warn(
+      `Port ${MANAGED_PORT} was open but MongoDB did not answer; waiting for it to close.`,
+    );
     await waitForPortFree(MANAGED_PORT, HOST);
   }
 

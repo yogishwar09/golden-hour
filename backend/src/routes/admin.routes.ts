@@ -26,5 +26,9 @@ adminRoutes.get('/requests/active', requireRole('admin', 'hospital'), listActive
 adminRoutes.use(requireRole('admin'));
 adminRoutes.get('/requests', validate(paginationSchema, 'query'), listAllRequests);
 adminRoutes.get('/users', validate(paginationSchema, 'query'), listUsers);
-adminRoutes.patch('/users/:id/active', validate(z.object({ isActive: z.boolean() })), setUserActive);
+adminRoutes.patch(
+  '/users/:id/active',
+  validate(z.object({ isActive: z.boolean() })),
+  setUserActive,
+);
 adminRoutes.get('/audit', validate(paginationSchema, 'query'), listAuditLog);

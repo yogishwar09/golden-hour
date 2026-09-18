@@ -118,10 +118,9 @@ class SimulatedCrew {
     });
     this.token = auth.accessToken;
 
-    const shift = await api<{ ambulance: { id: string; vehicleNumber: string; location: LatLng | null; status: string } }>(
-      '/api/driver/shift',
-      { token: this.token },
-    );
+    const shift = await api<{
+      ambulance: { id: string; vehicleNumber: string; location: LatLng | null; status: string };
+    }>('/api/driver/shift', { token: this.token });
     this.vehicleNumber = shift.ambulance.vehicleNumber;
     this.position = shift.ambulance.location ?? { lat: 17.385, lng: 78.4867 };
     this.base = { ...this.position };
@@ -197,7 +196,7 @@ class SimulatedCrew {
 
     await this.advance('ON_SCENE');
     log(this.vehicleNumber, `on scene for ${offer.code} - treating patient`);
-    await sleep((20_000 / options.speed) + Math.random() * 5000);
+    await sleep(20_000 / options.speed + Math.random() * 5000);
 
     const current = await api<{ request: EmergencyRequestDto }>(
       `/api/emergency/${offer.requestId}`,

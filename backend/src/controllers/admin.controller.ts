@@ -89,9 +89,10 @@ export const getStats = asyncHandler(async (_req: Request, res: Response) => {
       ]),
     ]);
 
-  const fleet = Object.fromEntries(
-    AMBULANCE_STATUSES.map((status) => [status, 0]),
-  ) as Record<AmbulanceStatus, number>;
+  const fleet = Object.fromEntries(AMBULANCE_STATUSES.map((status) => [status, 0])) as Record<
+    AmbulanceStatus,
+    number
+  >;
   for (const row of fleetCounts) fleet[row._id] = row.count;
 
   const byPriority = Object.fromEntries(PRIORITIES.map((p) => [p, 0])) as Record<Priority, number>;
