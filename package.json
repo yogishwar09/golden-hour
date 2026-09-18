@@ -1,0 +1,32 @@
+{
+  "name": "smart-ambulance",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Smart Emergency Ambulance Dispatch System - real-time ambulance dispatch, tracking and hospital coordination",
+  "workspaces": [
+    "packages/shared",
+    "backend",
+    "frontend"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "build:shared": "npm run build --workspace @sas/shared",
+    "dev": "npm run build:shared && concurrently -n api,web -c magenta,cyan \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:backend": "npm run dev --workspace @sas/backend",
+    "dev:frontend": "npm run dev --workspace @sas/frontend",
+    "build": "npm run build:shared && npm run build --workspace @sas/backend && npm run build --workspace @sas/frontend",
+    "start": "npm run start --workspace @sas/backend",
+    "seed": "npm run seed --workspace @sas/backend",
+    "simulate": "npm run simulate --workspace @sas/backend",
+    "test": "npm run build:shared && npm run test --workspace @sas/backend",
+    "test:watch": "npm run test:watch --workspace @sas/backend",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run build:shared && npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}

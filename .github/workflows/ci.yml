@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A new push to the same branch makes an in-flight run obsolete.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck, test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared contracts
+        run: npm run build:shared
+
+      - name: Typecheck backend
+        run: npm run typecheck --workspace @sas/backend
+
+      - name: Typecheck frontend
+        run: npx tsc -p frontend/tsconfig.app.json --noEmit
+
+      # The suite starts its own in-memory MongoDB; no service container needed.
+      - name: Run tests
+        run: npm run test --workspace @sas/backend
+        env:
+          NODE_ENV: test
+
+      - name: Build backend
+        run: npm run build --workspace @sas/backend
+
+      - name: Build frontend
+        run: npm run build --workspace @sas/frontend
+
+  docker:
+    name: Build container images
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Only worth the minutes once the code is known good.
+    needs: verify
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: frontend/Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

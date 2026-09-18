@@ -1,0 +1,60 @@
+# Runs the whole system locally: database, API and web front end.
+#
+#   docker compose up --build
+#   docker compose run --rm api npm run seed --workspace @sas/backend
+#
+# The front end is then on http://localhost:8080 and the API on :4000.
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      # The API must not start against a database that is not yet accepting
+      # connections, or it would fail its first server selection and exit.
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: '4000'
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DB_NAME: smart_ambulance
+      # Local-only value. Generate a real secret for any deployed environment.
+      JWT_SECRET: ${JWT_SECRET:-compose-local-secret-not-for-production-use}
+      CORS_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+      LOG_LEVEL: info
+    ports:
+      - '4000:4000'
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        # The browser talks to the API directly, so this is the host's address,
+        # not the compose network name.
+        VITE_API_URL: http://localhost:4000
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - '8080:80'
+
+volumes:
+  mongo-data:

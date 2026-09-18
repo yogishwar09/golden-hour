@@ -1,0 +1,143 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-ink-950 text-ink-100 antialiased;
+    /* A faint two-point wash so large dark surfaces are not dead flat. */
+    background-image:
+      radial-gradient(ellipse 80% 50% at 15% -10%, rgba(244, 63, 94, 0.09), transparent),
+      radial-gradient(ellipse 60% 50% at 100% 0%, rgba(56, 189, 248, 0.06), transparent);
+    background-attachment: fixed;
+  }
+
+  /* Never suppress motion the user has asked not to see. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-ink-700;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-ink-600;
+  }
+
+  /* A single visible focus treatment everywhere, for keyboard users. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-emergency-400 ring-offset-2 ring-offset-ink-950;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-ink-700/70 bg-ink-850/80 backdrop-blur-sm;
+  }
+
+  .card-hover {
+    @apply transition-colors duration-200 hover:border-ink-600 hover:bg-ink-800/80;
+  }
+
+  .label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink-300;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-ink-600 bg-ink-900/80 px-4 py-3 text-ink-100
+      placeholder:text-ink-400 transition-colors
+      focus:border-emergency-500 focus:outline-none focus:ring-2 focus:ring-emergency-500/25;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold
+      transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn bg-emergency-600 text-white shadow-lg shadow-emergency-900/40
+      hover:bg-emergency-500 active:scale-[0.98];
+  }
+
+  .btn-secondary {
+    @apply btn border border-ink-600 bg-ink-800 text-ink-100 hover:border-ink-500 hover:bg-ink-700
+      active:scale-[0.98];
+  }
+
+  .btn-ghost {
+    @apply btn text-ink-300 hover:bg-ink-800 hover:text-ink-100;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1
+      text-xs font-semibold;
+  }
+
+  /* Tabular figures keep live counters from jittering as digits change. */
+  .numeric {
+    @apply font-mono tabular-nums;
+  }
+}
+
+/* --- Leaflet overrides -------------------------------------------------- */
+
+.leaflet-container {
+  @apply h-full w-full bg-ink-900 font-sans;
+}
+
+/* OpenStreetMap tiles are designed for light UI; this settles them into the
+   dark theme without losing road legibility. */
+.map-dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(185deg) brightness(0.92) contrast(0.88) saturate(0.55);
+}
+
+.leaflet-control-attribution {
+  @apply !bg-ink-900/85 !text-[10px] !text-ink-400;
+}
+.leaflet-control-attribution a {
+  @apply !text-ink-300;
+}
+
+.leaflet-control-zoom a {
+  @apply !border-ink-700 !bg-ink-850 !text-ink-100;
+}
+.leaflet-control-zoom a:hover {
+  @apply !bg-ink-700;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  @apply !rounded-xl !border !border-ink-700 !bg-ink-850 !text-ink-100 !shadow-2xl;
+}
+.leaflet-popup-content {
+  @apply !m-0 !p-3.5;
+}
+
+/* Marker wrappers are plain divs, so strip Leaflet's default chrome. */
+.marker-plain {
+  background: transparent;
+  border: none;
+}

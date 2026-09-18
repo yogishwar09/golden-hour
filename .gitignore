@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+coverage/
+*.log
+.env
+.env.local
+.env.*.local
+.DS_Store
+.vite/
+.cache/
+backend/uploads/*
+!backend/uploads/.gitkeep
+.mongodb-binaries/
+*.tsbuildinfo
+backend/.local-db/

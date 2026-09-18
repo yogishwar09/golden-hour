@@ -1,0 +1,23 @@
+# Render blueprint for the API.
+# The front end deploys to Vercel from frontend/vercel.json.
+services:
+  - type: web
+    name: smart-ambulance-api
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci && npm run build:shared && npm run build --workspace @sas/backend
+    startCommand: node backend/dist/server.js
+    healthCheckPath: /api/ready
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render provides PORT; the server reads it.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MONGO_URI
+        sync: false # Set this to your Atlas connection string in the dashboard.
+      - key: CORS_ORIGINS
+        sync: false # Set this to your deployed front-end origin.
+      - key: LOG_LEVEL
+        value: info
