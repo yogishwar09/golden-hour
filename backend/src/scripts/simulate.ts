@@ -120,6 +120,7 @@ class SimulatedCrew {
 
     const shift = await api<{
       ambulance: { id: string; vehicleNumber: string; location: LatLng | null; status: string };
+      activeRequest: EmergencyRequestDto | null;
     }>('/api/driver/shift', { token: this.token });
     this.vehicleNumber = shift.ambulance.vehicleNumber;
     this.position = shift.ambulance.location ?? { lat: 17.385, lng: 78.4867 };
@@ -136,6 +137,16 @@ class SimulatedCrew {
 
     this.connectSocket();
     void this.loop();
+
+    // A case left in flight by a previous run, an API restart or a dropped
+    // connection. The patient is still waiting on it.
+    if (shift.activeRequest) {
+      log(
+        this.vehicleNumber,
+        `resuming ${shift.activeRequest.code} (${shift.activeRequest.status})`,
+      );
+      void this.workCase(shift.activeRequest.id);
+    }
   }
 
   private connectSocket(): void {
@@ -157,6 +168,13 @@ class SimulatedCrew {
       log(this.vehicleNumber, `socket error: ${error.message}`);
     });
 
+    // A reconnect means this crew was out of touch for a while. The server may
+    // still be holding a case for them, and an offer sent during the outage is
+    // gone for good -- so ask rather than wait to be told.
+    socket.on('connect', () => {
+      void this.resumeActiveCase();
+    });
+
     this.socket = socket;
   }
 
@@ -175,7 +193,7 @@ class SimulatedCrew {
         body: { requestId: offer.requestId, accept: true },
       });
       log(this.vehicleNumber, `accepted ${offer.code} (${offer.priority}) - responding`);
-      await this.runCase(offer);
+      await this.workCase(offer.requestId);
     } catch (error) {
       log(this.vehicleNumber, `could not take ${offer.code}: ${(error as Error).message}`);
       this.busy = false;
@@ -184,45 +202,114 @@ class SimulatedCrew {
     }
   }
 
-  /** Works one case from acceptance to completion. */
-  private async runCase(offer: DispatchOfferDto): Promise<void> {
-    await this.advance('EN_ROUTE_TO_SCENE');
+  /**
+   * Works a case through to closure, starting from whatever state it is
+   * currently in.
+   *
+   * Each turn of the loop re-reads the case from the server rather than
+   * trusting local state. That is what lets a crew pick up a case it was
+   * already part-way through -- after a dropped socket or an API restart, a
+   * crew that simply forgot would leave a patient waiting at the roadside
+   * forever with a vehicle committed to them.
+   */
+  private async workCase(requestId: string): Promise<void> {
+    this.busy = true;
+    this.currentRequestId = requestId;
 
-    // The server has already routed this vehicle to the scene; reuse that exact
-    // road geometry so the simulated vehicle follows streets, not a straight line.
-    await this.loadRouteFromServer(offer.requestId, offer.pickup);
-    await this.driveTo(offer.pickup);
-    if (this.stopped) return;
+    try {
+      // Bounded, so a case that refuses to advance cannot spin indefinitely.
+      for (let step = 0; step < 24 && !this.stopped; step += 1) {
+        const { request } = await api<{ request: EmergencyRequestDto }>(
+          `/api/emergency/${requestId}`,
+          { token: this.token },
+        );
 
-    await this.advance('ON_SCENE');
-    log(this.vehicleNumber, `on scene for ${offer.code} - treating patient`);
-    await sleep(20_000 / options.speed + Math.random() * 5000);
+        switch (request.status) {
+          case 'ASSIGNED':
+            await this.advance('EN_ROUTE_TO_SCENE');
+            break;
 
-    const current = await api<{ request: EmergencyRequestDto }>(
-      `/api/emergency/${offer.requestId}`,
-      { token: this.token },
-    );
-    const hospital = current.request.hospital;
-    if (!hospital) {
-      log(this.vehicleNumber, 'no destination hospital; closing case');
-      await this.advance('COMPLETED');
+          case 'EN_ROUTE_TO_SCENE':
+            // Reuse the server's own route so the vehicle follows streets
+            // rather than cutting across the city in a straight line.
+            await this.loadRouteFromServer(requestId, request.pickup);
+            await this.driveTo(request.pickup);
+            if (this.stopped) return;
+            await this.advance('ON_SCENE');
+            break;
+
+          case 'ON_SCENE': {
+            log(this.vehicleNumber, `on scene for ${request.code} - treating patient`);
+            await sleep(20_000 / options.speed + Math.random() * 5000);
+            if (this.stopped) return;
+
+            if (!request.hospital) {
+              log(this.vehicleNumber, 'no destination hospital; closing case');
+              await this.advance('COMPLETED');
+              break;
+            }
+            await this.advance('TRANSPORTING', { destinationHospitalId: request.hospital.id });
+            log(this.vehicleNumber, `transporting to ${request.hospital.name}`);
+            break;
+          }
+
+          case 'TRANSPORTING': {
+            if (!request.hospital) {
+              await this.advance('COMPLETED');
+              break;
+            }
+            await this.loadRouteFromServer(requestId, request.hospital.location);
+            await this.driveTo(request.hospital.location);
+            if (this.stopped) return;
+            await this.advance('ARRIVED_AT_HOSPITAL');
+            break;
+          }
+
+          case 'ARRIVED_AT_HOSPITAL':
+            await sleep(6000 / options.speed);
+            await this.advance('COMPLETED');
+            break;
+
+          default:
+            // COMPLETED, CANCELLED, or anything else this crew cannot advance.
+            log(this.vehicleNumber, `case ${request.code} is now ${request.status}`);
+            return;
+        }
+
+        // A breather, so a status the server refuses to change cannot become a
+        // tight request loop.
+        await sleep(400);
+      }
+    } catch (error) {
+      log(this.vehicleNumber, `case handling failed: ${(error as Error).message}`);
+    } finally {
       this.release();
-      return;
     }
+  }
 
-    await this.advance('TRANSPORTING', { destinationHospitalId: hospital.id });
-    log(this.vehicleNumber, `transporting to ${hospital.name}`);
+  /**
+   * Picks up a case this crew is still committed to.
+   *
+   * Called on start and on every reconnect: the server is the authority on
+   * whether this vehicle owes a patient a journey.
+   */
+  private async resumeActiveCase(): Promise<void> {
+    if (this.busy || this.stopped) return;
 
-    await this.loadRouteFromServer(offer.requestId, hospital.location);
-    await this.driveTo(hospital.location);
-    if (this.stopped) return;
+    try {
+      const shift = await api<{ activeRequest: EmergencyRequestDto | null }>('/api/driver/shift', {
+        token: this.token,
+      });
+      if (!shift.activeRequest) return;
 
-    await this.advance('ARRIVED_AT_HOSPITAL');
-    await sleep(6000 / options.speed);
-    await this.advance('COMPLETED');
-    log(this.vehicleNumber, `closed ${offer.code}`);
-
-    this.release();
+      log(
+        this.vehicleNumber,
+        `resuming ${shift.activeRequest.code} (${shift.activeRequest.status})`,
+      );
+      await this.workCase(shift.activeRequest.id);
+    } catch {
+      /* The next reconnect will try again. */
+    }
   }
 
   private release(): void {
