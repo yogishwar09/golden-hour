@@ -17,7 +17,9 @@ export function ambulanceIcon(status: AmbulanceStatus, heading = 0, isFocused = 
   const responding = ['DISPATCHED', 'ON_SCENE', 'TRANSPORTING'].includes(status);
 
   return L.divIcon({
-    className: 'marker-plain',
+    // `marker-vehicle` is what the stylesheet animates between GPS fixes, so a
+    // vehicle glides along the road instead of teleporting once a second.
+    className: 'marker-plain marker-vehicle',
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
     html: `

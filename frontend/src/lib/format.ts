@@ -9,9 +9,17 @@ import type { AmbulanceStatus, Priority, RequestStatus } from '@sas/shared';
 
 export function formatEta(seconds: number | null | undefined): string {
   if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) return '--';
-  const minutes = Math.max(0, Math.round(seconds / 60));
-  if (minutes < 1) return 'Arriving now';
-  if (minutes === 1) return '1 min';
+  if (seconds <= 20) return 'Arriving now';
+
+  // Inside two minutes, count in seconds. Rounded to the minute the number
+  // would sit unchanged through the final approach -- the stretch where a
+  // patient is watching hardest and a still number reads as a stalled vehicle.
+  if (seconds < 120) {
+    const whole = Math.round(seconds);
+    return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+  }
+
+  const minutes = Math.round(seconds / 60);
   if (minutes < 60) return `${minutes} min`;
   return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
 }

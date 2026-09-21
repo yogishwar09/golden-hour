@@ -52,6 +52,10 @@ dispatches, follow road routes to the patient, and complete cases. It is an
 ordinary API client with no special privileges, so anything it does, a real
 crew device can do.
 
+Vehicles move at about 47 km/h, which is what an ambulance with right of way
+averages through a city, so a case takes the minutes it would really take. Add
+`-- --speed 8` when you are demonstrating it to someone and do not want to wait.
+
 ## Running it in VS Code
 
 Open the **repository root** (not `backend/` or `frontend/` on their own — the
@@ -342,7 +346,7 @@ See `.env.example` for every setting.
 | --- | --- |
 | `npm run dev` | API and web together, both with hot reload |
 | `npm run seed` | Reset to a known demo dataset |
-| `npm run simulate` | Drive the seeded fleet (`-- --speed 8` to run faster) |
+| `npm run simulate` | Drive the seeded fleet in real time (`-- --speed 8` to compress it for a demo) |
 | `npm test` | The full test suite |
 | `npm run typecheck` | Typecheck every workspace |
 | `npm run build` | Production build of everything |

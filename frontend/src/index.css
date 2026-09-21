@@ -141,3 +141,31 @@
   background: transparent;
   border: none;
 }
+
+/*
+ * Vehicles arrive as a GPS fix once a second, and Leaflet positions a marker by
+ * writing a transform. Left alone that reads as a jump per second; easing the
+ * transform over the same second turns the fixes back into continuous motion
+ * along the road.
+ *
+ * Linear, not eased: a vehicle travelling at a steady speed should not appear
+ * to accelerate and brake between every pair of fixes.
+ */
+.leaflet-marker-icon.marker-vehicle {
+  transition: transform 1s linear;
+}
+
+/*
+ * ...except while the map is zooming, when Leaflet repositions every marker at
+ * once. Animating that would leave the fleet swimming across the map to catch
+ * up with the new projection.
+ */
+.leaflet-zoom-anim .leaflet-marker-icon.marker-vehicle {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leaflet-marker-icon.marker-vehicle {
+    transition: none;
+  }
+}

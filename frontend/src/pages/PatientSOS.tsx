@@ -532,6 +532,42 @@ function SosButton({
 }
 
 /**
+ * Counts an ETA down between server updates.
+ *
+ * The server recomputes a route only when the vehicle has covered meaningful
+ * ground, which is right -- re-routing on every GPS fix would hammer the
+ * routing engine. But it leaves the number on screen frozen for ten seconds at
+ * a time, which reads as a stalled ambulance to someone watching it.
+ *
+ * So the display ticks down locally, and every figure the server sends
+ * replaces it. The server stays the authority; this only fills the silence.
+ */
+function useCountdown(serverSeconds: number | null | undefined, running: boolean): number | null {
+  const [seconds, setSeconds] = useState<number | null>(serverSeconds ?? null);
+
+  // A fresh figure from the server always wins over the local count.
+  useEffect(() => {
+    setSeconds(serverSeconds ?? null);
+  }, [serverSeconds]);
+
+  useEffect(() => {
+    if (!running || seconds === null) return;
+
+    const timer = window.setInterval(() => {
+      // Never reaches zero on its own: "arriving now" is the server's call to
+      // make, not a countdown's.
+      setSeconds((current) => (current === null ? null : Math.max(5, current - 1)));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+    // Depends on whether a count exists, not on its value, so the interval is
+    // created once per case rather than restarted every second.
+  }, [running, seconds === null]);
+
+  return seconds;
+}
+
+/**
  * What the service has done, above the SOS button.
  *
  * A caller deciding whether to press it is really asking "will anyone come?".
@@ -861,6 +897,8 @@ function LiveCase({ caseData, onCancel }: { caseData: EmergencyRequestDto; onCan
    */
   const showEta = ['ASSIGNED', 'EN_ROUTE_TO_SCENE', 'TRANSPORTING'].includes(caseData.status);
 
+  const liveEta = useCountdown(caseData.etaSeconds, showEta);
+
   const fitPoints = useMemo(() => {
     const points = [caseData.pickup];
     if (caseData.ambulance?.location) points.push(caseData.ambulance.location);
@@ -920,7 +958,7 @@ function LiveCase({ caseData, onCancel }: { caseData: EmergencyRequestDto; onCan
                     longer and would wrap awkwardly at that scale. */}
                 {showEta ? (
                   <p className="numeric mt-1 text-5xl font-extrabold leading-none text-emergency-300">
-                    {formatEta(caseData.etaSeconds)}
+                    {formatEta(liveEta)}
                   </p>
                 ) : (
                   <p className="mt-1.5 text-2xl font-bold leading-tight text-emergency-300">

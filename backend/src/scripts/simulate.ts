@@ -41,8 +41,10 @@ function parseOptions(): Options {
   const count = Number(read('--drivers') ?? 10);
   return {
     apiUrl: read('--api') ?? `http://localhost:${env.PORT}`,
-    // Real time is faithful but tedious to watch; the default compresses it.
-    speed: Math.max(1, Math.min(20, Number(read('--speed') ?? 4))),
+    // Real time by default: an ambulance that crosses the city in ten seconds
+    // does not look like an ambulance. `--speed` compresses it when someone is
+    // watching a demo rather than the system.
+    speed: Math.max(1, Math.min(20, Number(read('--speed') ?? 1))),
     drivers: Array.from({ length: count }, (_, index) =>
       index === 0 ? 'driver@demo.test' : `driver${index + 1}@demo.test`,
     ),
@@ -51,13 +53,23 @@ function parseOptions(): Options {
 
 const options = parseOptions();
 
-/** Metres per second at which a vehicle travels while responding. */
+/**
+ * Metres per second while responding: about 47 km/h, which is what an
+ * ambulance with right of way actually averages through a city -- fast between
+ * junctions, slow through them.
+ */
 const RESPONSE_SPEED_MPS = 13;
-/** Slower drift while idle, so the map is alive without vehicles racing. */
-const IDLE_SPEED_MPS = 3;
+/** A slow crawl while idle, so the map is alive without vehicles racing. */
+const IDLE_SPEED_MPS = 1.5;
 /** Close enough to count as arrived. */
 const ARRIVAL_RADIUS_METRES = 45;
-/** How often each vehicle reports position, in real milliseconds. */
+/**
+ * How often each vehicle reports position, in real milliseconds.
+ *
+ * One second matches what a real crew device sends, and the map interpolates
+ * between the fixes, so movement reads as continuous rather than as a jump per
+ * second.
+ */
 const TICK_MS = 1000;
 
 const log = (vehicle: string, message: string): void => {
