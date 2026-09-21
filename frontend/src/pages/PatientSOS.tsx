@@ -42,6 +42,12 @@ import { StatusTimeline } from '../components/StatusTimeline';
 import { Card, ErrorNotice, FullPageLoader, SectionTitle, Spinner } from '../components/ui';
 import { formatDistance, formatEta, PRIORITY_STYLES, REQUEST_STATUS_STYLES } from '../lib/format';
 
+/**
+ * How often the pre-SOS map re-reads nearby ambulances. Fast enough that the
+ * fleet visibly moves, slow enough that a screen left open costs little.
+ */
+const NEARBY_REFRESH_MS = 4000;
+
 /** Cases in these states are still running and own the screen. */
 const LIVE_STATUSES = new Set([
   'PENDING',
@@ -96,20 +102,40 @@ export function PatientSOS() {
       .finally(() => setLoading(false));
   }, []);
 
-  /** Show what is around the caller while they are deciding. */
+  /**
+   * Show what is around the caller while they are deciding.
+   *
+   * The ambulances are re-read on a timer rather than pushed over the socket.
+   * Position events are addressed to a case's room, the control room and the
+   * vehicle's own room -- a caller who has not raised anything yet is in none
+   * of those, and broadcasting the whole fleet to every signed-in patient to
+   * animate a reassurance map would be the wrong trade. Once a case exists the
+   * live socket takes over and this stops.
+   *
+   * Hospitals are fetched once: buildings do not move.
+   */
   useEffect(() => {
     if (!position || activeCase) return;
     const params = { lat: position.lat, lng: position.lng, radiusKm: 12 };
 
-    void api
-      .get<{ items: AmbulanceDto[] }>('/ambulances/nearby', { params })
-      .then((response) => setNearby(response.data.items))
-      .catch(() => setNearby([]));
+    const loadAmbulances = (): void => {
+      void api
+        .get<{ items: AmbulanceDto[] }>('/ambulances/nearby', { params })
+        .then((response) => setNearby(response.data.items))
+        .catch(() => {
+          /* Keep the last known positions rather than blanking the map. */
+        });
+    };
+
+    loadAmbulances();
+    const timer = window.setInterval(loadAmbulances, NEARBY_REFRESH_MS);
 
     void api
       .get<{ items: HospitalDto[] }>('/hospitals/nearby', { params: { ...params, limit: 8 } })
       .then((response) => setHospitals(response.data.items))
       .catch(() => setHospitals([]));
+
+    return () => window.clearInterval(timer);
   }, [position, activeCase]);
 
   // Follow the case's own room, so updates arrive without polling. Keyed on the
