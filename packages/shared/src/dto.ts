@@ -143,6 +143,37 @@ export interface FleetStatsDto {
   hospitalBeds: { total: number; available: number };
 }
 
+/**
+ * Service-wide figures safe to show any signed-in user.
+ *
+ * Deliberately aggregate-only: counts and averages, never a case, a person or
+ * a location. This is what a patient sees, so nothing here may identify anyone.
+ */
+export interface ServiceStatsDto {
+  /** Cases completed since the service started. */
+  casesCompleted: number;
+  casesCompletedToday: number;
+  /** Cases currently being worked, fleet-wide. */
+  activeNow: number;
+  /** Mean seconds from SOS to a crew reaching the patient, all time. */
+  averageResponseSeconds: number | null;
+  /** Vehicles ready to be dispatched right now. */
+  ambulancesAvailable: number;
+  ambulancesTotal: number;
+  hospitalsCovered: number;
+  /** Share of cases that met the response target for their priority, 0..1. */
+  slaComplianceRate: number | null;
+}
+
+/** A caller's own history, shown on their screen. */
+export interface MyStatsDto {
+  totalRequests: number;
+  completed: number;
+  /** Mean seconds to a crew reaching this caller, over their own cases. */
+  averageResponseSeconds: number | null;
+  lastRequestAt: string | null;
+}
+
 export interface TimeSeriesPointDto {
   bucket: string;
   requests: number;

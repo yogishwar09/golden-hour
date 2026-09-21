@@ -13,12 +13,14 @@ import {
   AlertTriangle,
   Ambulance as AmbulanceIcon,
   Building2,
+  CheckCircle2,
   Crosshair,
   Droplet,
   MapPin,
   Navigation,
   Phone,
   Siren,
+  Star,
   X,
 } from 'lucide-react';
 import {
@@ -32,6 +34,8 @@ import {
   type EmergencyType,
   type HospitalDto,
   type LatLng,
+  type MyStatsDto,
+  type ServiceStatsDto,
 } from '@sas/shared';
 import { api, errorMessage } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -39,8 +43,21 @@ import { useSocketEvent } from '../hooks/useSocketEvent';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { MapView } from '../components/MapView';
 import { StatusTimeline } from '../components/StatusTimeline';
-import { Card, ErrorNotice, FullPageLoader, SectionTitle, Spinner } from '../components/ui';
-import { formatDistance, formatEta, PRIORITY_STYLES, REQUEST_STATUS_STYLES } from '../lib/format';
+import {
+  Card,
+  ErrorNotice,
+  FullPageLoader,
+  SectionTitle,
+  Skeleton,
+  Spinner,
+} from '../components/ui';
+import {
+  formatDistance,
+  formatDurationShort,
+  formatEta,
+  PRIORITY_STYLES,
+  REQUEST_STATUS_STYLES,
+} from '../lib/format';
 
 /**
  * How often the pre-SOS map re-reads nearby ambulances. Fast enough that the
@@ -91,6 +108,11 @@ export function PatientSOS() {
   const [manualPosition, setManualPosition] = useState<LatLng | null>(null);
   const [pickingLocation, setPickingLocation] = useState(false);
 
+  /** A case that has just ended, held so its outcome can be shown. */
+  const [finishedCase, setFinishedCase] = useState<EmergencyRequestDto | null>(null);
+  const [serviceStats, setServiceStats] = useState<ServiceStatsDto | null>(null);
+  const [myStats, setMyStats] = useState<MyStatsDto | null>(null);
+
   const position = manualPosition ?? geo.position;
 
   /** Load whatever case is already running for this caller. */
@@ -101,6 +123,27 @@ export function PatientSOS() {
       .catch((caught) => setError(errorMessage(caught)))
       .finally(() => setLoading(false));
   }, []);
+
+  /**
+   * The service's record and the caller's own. Re-read whenever a case ends,
+   * so the numbers a caller sees include the journey they just took.
+   */
+  useEffect(() => {
+    const load = (): void => {
+      void api
+        .get<ServiceStatsDto>('/stats/service')
+        .then((response) => setServiceStats(response.data))
+        .catch(() => setServiceStats(null));
+      void api
+        .get<MyStatsDto>('/stats/me')
+        .then((response) => setMyStats(response.data))
+        .catch(() => setMyStats(null));
+    };
+
+    load();
+    const timer = window.setInterval(load, 30_000);
+    return () => window.clearInterval(timer);
+  }, [finishedCase]);
 
   /**
    * Show what is around the caller while they are deciding.
@@ -152,11 +195,16 @@ export function PatientSOS() {
   useSocketEvent('request:updated', (updated) => {
     setActiveCase((previous) => {
       if (previous && previous.id !== updated.id) return previous;
-      return LIVE_STATUSES.has(updated.status) ? updated : null;
+      if (LIVE_STATUSES.has(updated.status)) return updated;
+      // The case has ended. Hold onto it so the caller gets an outcome rather
+      // than the screen silently reverting to the SOS button.
+      setFinishedCase(updated);
+      return null;
     });
   });
 
   useSocketEvent('request:created', (created) => {
+    setFinishedCase(null);
     setActiveCase(created);
   });
 
@@ -164,7 +212,9 @@ export function PatientSOS() {
     setActiveCase((previous) => {
       if (!previous || previous.id !== event.requestId) return previous;
       if (!LIVE_STATUSES.has(event.status)) {
-        if (event.status === 'COMPLETED') toast.success('Case closed. Take care.');
+        // `request:updated` carries the full case and will populate the
+        // summary; this only has to clear the live view.
+        setFinishedCase((already) => already ?? { ...previous, status: event.status });
         return null;
       }
       return { ...previous, status: event.status };
@@ -239,11 +289,19 @@ export function PatientSOS() {
 
   if (loading) return <FullPageLoader label="Checking for an active request" />;
 
-  return activeCase ? (
-    <LiveCase caseData={activeCase} onCancel={cancelCase} />
-  ) : (
+  if (activeCase) return <LiveCase caseData={activeCase} onCancel={cancelCase} />;
+
+  if (finishedCase) {
+    return (
+      <CaseOutcome caseData={finishedCase} myStats={myStats} onDone={() => setFinishedCase(null)} />
+    );
+  }
+
+  return (
     <div className="mx-auto grid w-full max-w-[1600px] gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,420px)_1fr]">
       <div className="space-y-5">
+        <ServiceStatsStrip stats={serviceStats} myStats={myStats} />
+
         <Card className="overflow-hidden">
           <div className="border-b border-ink-700 bg-gradient-to-br from-emergency-950/40 to-transparent px-6 py-5">
             <h1 className="text-xl font-bold tracking-tight">Hello, {user?.name.split(' ')[0]}</h1>
@@ -474,6 +532,257 @@ function SosButton({
 }
 
 /**
+ * What the service has done, above the SOS button.
+ *
+ * A caller deciding whether to press it is really asking "will anyone come?".
+ * Answering with the service's actual record -- cases completed, crews free
+ * right now, how fast it typically reaches people -- is a more honest answer
+ * than a reassuring sentence, and it is live.
+ */
+function ServiceStatsStrip({
+  stats,
+  myStats,
+}: {
+  stats: ServiceStatsDto | null;
+  myStats: MyStatsDto | null;
+}) {
+  if (!stats) return <Skeleton className="h-[92px]" />;
+
+  const readiness =
+    stats.ambulancesTotal > 0 ? stats.ambulancesAvailable / stats.ambulancesTotal : 0;
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="grid grid-cols-3 divide-x divide-ink-700">
+        <div className="px-4 py-3.5 text-center">
+          <p className="numeric text-2xl font-bold leading-none text-emerald-300">
+            {stats.casesCompleted.toLocaleString()}
+          </p>
+          <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-ink-400">
+            Cases resolved
+          </p>
+        </div>
+        <div className="px-4 py-3.5 text-center">
+          <p
+            className={`numeric text-2xl font-bold leading-none ${
+              readiness > 0.3
+                ? 'text-sky-300'
+                : readiness > 0
+                  ? 'text-amber-300'
+                  : 'text-emergency-300'
+            }`}
+          >
+            {stats.ambulancesAvailable}
+            <span className="text-sm font-medium text-ink-400">/{stats.ambulancesTotal}</span>
+          </p>
+          <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-ink-400">
+            Crews ready
+          </p>
+        </div>
+        <div className="px-4 py-3.5 text-center">
+          <p className="numeric text-2xl font-bold leading-none text-ink-100">
+            {formatDurationShort(stats.averageResponseSeconds)}
+          </p>
+          <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-ink-400">
+            Avg response
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-ink-700 px-4 py-2.5 text-xs text-ink-400">
+        <span>{stats.hospitalsCovered} hospitals covered</span>
+        {stats.activeNow > 0 && (
+          <span className="flex items-center gap-1.5 text-emergency-300">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emergency-400 opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emergency-500" />
+            </span>
+            {stats.activeNow} live now
+          </span>
+        )}
+        {stats.slaComplianceRate !== null && (
+          <span>{Math.round(stats.slaComplianceRate * 100)}% within target</span>
+        )}
+        {myStats && myStats.totalRequests > 0 && (
+          <span className="ml-auto text-ink-300">
+            You: {myStats.totalRequests} request{myStats.totalRequests === 1 ? '' : 's'}
+          </span>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * The end of a case.
+ *
+ * Previously a completed case simply disappeared and the screen reverted to
+ * the SOS button, which left a caller with no idea what had happened. This is
+ * the receipt: where they were taken, how long it took, who took them, and the
+ * one question worth asking afterwards.
+ */
+function CaseOutcome({
+  caseData,
+  myStats,
+  onDone,
+}: {
+  caseData: EmergencyRequestDto;
+  myStats: MyStatsDto | null;
+  onDone: () => void;
+}) {
+  const [rating, setRating] = useState(caseData.rating?.stars ?? 0);
+  const [rated, setRated] = useState(Boolean(caseData.rating));
+
+  const completed = caseData.status === 'COMPLETED';
+  const started = new Date(caseData.createdAt).getTime();
+  const ended = new Date(caseData.updatedAt).getTime();
+  const totalSeconds = Math.max(0, Math.round((ended - started) / 1000));
+
+  const submitRating = async (stars: number): Promise<void> => {
+    setRating(stars);
+    try {
+      await api.post(`/emergency/${caseData.id}/rate`, { stars });
+      setRated(true);
+      toast.success('Thank you for the feedback.');
+    } catch (caught) {
+      toast.error(errorMessage(caught));
+    }
+  };
+
+  return (
+    <div className="mx-auto w-full max-w-2xl p-4 sm:p-6">
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+        <Card className="overflow-hidden">
+          <div
+            className={`px-6 py-7 text-center ${
+              completed
+                ? 'bg-gradient-to-br from-emerald-950/50 to-transparent'
+                : 'bg-gradient-to-br from-ink-800 to-transparent'
+            }`}
+          >
+            <span
+              className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full ${
+                completed ? 'bg-emerald-500/15' : 'bg-ink-700'
+              }`}
+            >
+              {completed ? (
+                <CheckCircle2 className="h-7 w-7 text-emerald-300" aria-hidden />
+              ) : (
+                <X className="h-7 w-7 text-ink-300" aria-hidden />
+              )}
+            </span>
+
+            <h1 className="mt-4 text-2xl font-bold tracking-tight">
+              {completed ? 'You reached hospital safely' : REQUEST_STATUS_LABELS[caseData.status]}
+            </h1>
+            <p className="mt-1 text-sm text-ink-400">
+              Case {caseData.code} · {EMERGENCY_TYPE_LABELS[caseData.emergencyType]}
+            </p>
+          </div>
+
+          {completed && (
+            <div className="grid grid-cols-3 divide-x divide-ink-700 border-y border-ink-700">
+              <div className="px-3 py-4 text-center">
+                <p className="numeric text-xl font-bold text-emergency-300">
+                  {formatDurationShort(caseData.responseSeconds)}
+                </p>
+                <p className="mt-0.5 text-[11px] uppercase tracking-wider text-ink-400">
+                  To reach you
+                </p>
+              </div>
+              <div className="px-3 py-4 text-center">
+                <p className="numeric text-xl font-bold text-ink-100">
+                  {formatDurationShort(totalSeconds)}
+                </p>
+                <p className="mt-0.5 text-[11px] uppercase tracking-wider text-ink-400">
+                  Total journey
+                </p>
+              </div>
+              <div className="px-3 py-4 text-center">
+                <p className="numeric text-xl font-bold text-ink-100">{caseData.timeline.length}</p>
+                <p className="mt-0.5 text-[11px] uppercase tracking-wider text-ink-400">
+                  Steps logged
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-4 px-6 py-5">
+            {caseData.hospital && (
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-500/15">
+                  <Building2 className="h-5 w-5 text-teal-300" aria-hidden />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">{caseData.hospital.name}</p>
+                  <p className="truncate text-xs text-ink-400">{caseData.hospital.address}</p>
+                </div>
+              </div>
+            )}
+
+            {caseData.ambulance && (
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/15">
+                  <AmbulanceIcon className="h-5 w-5 text-sky-300" aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="numeric text-sm font-semibold">
+                    {caseData.ambulance.vehicleNumber}
+                  </p>
+                  <p className="truncate text-xs text-ink-400">
+                    {caseData.ambulance.crew.map((member) => member.name).join(' · ') ||
+                      AMBULANCE_TYPE_LABELS[caseData.ambulance.type]}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-xl border border-ink-700 bg-ink-900/50 p-4">
+              <StatusTimeline status={caseData.status} events={caseData.timeline} />
+            </div>
+
+            {completed && (
+              <div className="text-center">
+                <p className="label">{rated ? 'Your rating' : 'How did we do?'}</p>
+                <div className="flex justify-center gap-1.5">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      disabled={rated}
+                      onClick={() => submitRating(star)}
+                      aria-label={`Rate ${star} out of 5`}
+                      className="p-0.5 transition-transform enabled:hover:scale-110 disabled:cursor-default"
+                    >
+                      <Star
+                        className={`h-8 w-8 ${
+                          rating >= star ? 'fill-amber-400 text-amber-400' : 'text-ink-600'
+                        }`}
+                        aria-hidden
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {myStats && myStats.completed > 1 && (
+              <p className="text-center text-xs text-ink-400">
+                That is {myStats.completed} journeys this service has completed for you.
+              </p>
+            )}
+
+            <button type="button" onClick={onDone} className="btn-primary w-full py-3">
+              Done
+            </button>
+          </div>
+        </Card>
+      </motion.div>
+    </div>
+  );
+}
+
+/**
  * A deliberate confirmation step. The button is large and easy to hit by
  * accident, and a false dispatch takes a vehicle away from someone who needs it.
  */
@@ -545,6 +854,13 @@ function LiveCase({ caseData, onCancel }: { caseData: EmergencyRequestDto; onCan
     caseData.status,
   );
 
+  /**
+   * Whether a countdown means anything right now. It does while the vehicle is
+   * travelling -- towards the patient, and again towards the hospital. It does
+   * not while the crew is standing still with the patient.
+   */
+  const showEta = ['ASSIGNED', 'EN_ROUTE_TO_SCENE', 'TRANSPORTING'].includes(caseData.status);
+
   const fitPoints = useMemo(() => {
     const points = [caseData.pickup];
     if (caseData.ambulance?.location) points.push(caseData.ambulance.location);
@@ -592,23 +908,32 @@ function LiveCase({ caseData, onCancel }: { caseData: EmergencyRequestDto; onCan
             ) : (
               <>
                 <p className="text-xs font-bold uppercase tracking-wider text-ink-400">
-                  {crewIsWithPatient ? 'Status' : 'Arriving in'}
+                  {showEta
+                    ? caseData.status === 'TRANSPORTING'
+                      ? 'Reaching hospital in'
+                      : 'Arriving in'
+                    : 'Status'}
                 </p>
-                {/* The ETA gets the full display size; a status sentence is far
+                {/* The ETA gets the full display size -- during transport too,
+                    which is the longest part of the journey and the stretch a
+                    patient most wants a number for. A status sentence is far
                     longer and would wrap awkwardly at that scale. */}
-                {crewIsWithPatient ? (
-                  <p className="mt-1.5 text-2xl font-bold leading-tight text-emergency-300">
-                    {REQUEST_STATUS_LABELS[caseData.status]}
-                  </p>
-                ) : (
+                {showEta ? (
                   <p className="numeric mt-1 text-5xl font-extrabold leading-none text-emergency-300">
                     {formatEta(caseData.etaSeconds)}
                   </p>
+                ) : (
+                  <p className="mt-1.5 text-2xl font-bold leading-tight text-emergency-300">
+                    {REQUEST_STATUS_LABELS[caseData.status]}
+                  </p>
                 )}
-                {caseData.route && !crewIsWithPatient && (
+                {caseData.route && showEta && (
                   <p className="mt-2 text-sm text-ink-400">
-                    {formatDistance(caseData.route.distanceMetres)} away
-                    {caseData.route.source === 'straight-line' && ' (estimated)'}
+                    {formatDistance(caseData.route.distanceMetres)}{' '}
+                    {caseData.status === 'TRANSPORTING' ? 'to go' : 'away'}
+                    {caseData.ambulance && caseData.ambulance.speedMps > 1 && (
+                      <> · {Math.round(caseData.ambulance.speedMps * 3.6)} km/h</>
+                    )}
                   </p>
                 )}
               </>

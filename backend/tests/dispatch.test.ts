@@ -587,3 +587,101 @@ describe('control-room reporting', () => {
     expect(distances).toEqual([...distances].sort((a: number, b: number) => a - b));
   });
 });
+
+describe('service and personal statistics', () => {
+  it('reports the service record to an ordinary patient', async () => {
+    const { patientToken } = await scenario([{ number: 'TG09STA001', metresAway: 400 }]);
+    await raiseSos(patientToken);
+
+    const response = await request(app)
+      .get('/api/stats/service')
+      .set('Authorization', `Bearer ${patientToken}`)
+      .expect(200);
+
+    const stats = response.body;
+    expect(stats.activeNow).toBeGreaterThanOrEqual(1);
+    expect(stats.ambulancesTotal).toBe(1);
+    expect(stats.hospitalsCovered).toBeGreaterThanOrEqual(1);
+    expect(typeof stats.casesCompleted).toBe('number');
+
+    // Aggregate only: nothing here may identify a caller or a location.
+    const body = JSON.stringify(stats);
+    expect(body).not.toContain('Caller One');
+    expect(body).not.toContain('pickup');
+  });
+
+  it('counts a completed journey towards both records', async () => {
+    const context = await scenario([{ number: 'TG09STA002', metresAway: 400 }]);
+    const created = await raiseSos(context.patientToken);
+    await waitForOffer('TG09STA002');
+
+    const driverToken = await login(app, context.crews[0]!.driver.email);
+    await request(app)
+      .post('/api/driver/offer')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send({ requestId: created.id, accept: true })
+      .expect(200);
+
+    for (const status of ['EN_ROUTE_TO_SCENE', 'ON_SCENE']) {
+      await request(app)
+        .post('/api/driver/status')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({ requestId: created.id, status })
+        .expect(200);
+    }
+    await request(app)
+      .post('/api/driver/status')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send({
+        requestId: created.id,
+        status: 'TRANSPORTING',
+        destinationHospitalId: context.hospital._id.toString(),
+      })
+      .expect(200);
+    for (const status of ['ARRIVED_AT_HOSPITAL', 'COMPLETED']) {
+      await request(app)
+        .post('/api/driver/status')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({ requestId: created.id, status })
+        .expect(200);
+    }
+
+    const service = await request(app)
+      .get('/api/stats/service')
+      .set('Authorization', `Bearer ${context.patientToken}`)
+      .expect(200);
+    expect(service.body.casesCompleted).toBe(1);
+    expect(service.body.activeNow).toBe(0);
+    expect(service.body.averageResponseSeconds).toBeGreaterThanOrEqual(0);
+
+    const mine = await request(app)
+      .get('/api/stats/me')
+      .set('Authorization', `Bearer ${context.patientToken}`)
+      .expect(200);
+    expect(mine.body.totalRequests).toBe(1);
+    expect(mine.body.completed).toBe(1);
+    expect(mine.body.lastRequestAt).toBeTruthy();
+  });
+
+  it('scopes personal statistics to the caller asking', async () => {
+    const { patientToken } = await scenario([{ number: 'TG09STA003', metresAway: 400 }]);
+    await raiseSos(patientToken);
+
+    await createUser({ email: 'bystander@example.com' });
+    const otherToken = await login(app, 'bystander@example.com');
+
+    const mine = await request(app)
+      .get('/api/stats/me')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(200);
+
+    // Someone else's emergency is not part of this caller's record.
+    expect(mine.body.totalRequests).toBe(0);
+    expect(mine.body.lastRequestAt).toBeNull();
+  });
+
+  it('requires a signed-in user', async () => {
+    await request(app).get('/api/stats/service').expect(401);
+    await request(app).get('/api/stats/me').expect(401);
+  });
+});

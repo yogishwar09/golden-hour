@@ -4,6 +4,7 @@ import { emergencyRoutes } from './emergency.routes.js';
 import { driverRoutes } from './driver.routes.js';
 import { ambulanceRoutes, hospitalRoutes } from './fleet.routes.js';
 import { adminRoutes } from './admin.routes.js';
+import { statsRoutes } from './stats.routes.js';
 
 export const apiRoutes = Router();
 
@@ -13,3 +14,4 @@ apiRoutes.use('/driver', driverRoutes);
 apiRoutes.use('/ambulances', ambulanceRoutes);
 apiRoutes.use('/hospitals', hospitalRoutes);
 apiRoutes.use('/admin', adminRoutes);
+apiRoutes.use('/stats', statsRoutes);
