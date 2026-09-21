@@ -43,8 +43,6 @@ let managedInstance: { stop: () => Promise<boolean | void> } | null = null;
 
 /** True once a deliberate shutdown begins, so the watchdog stops interfering. */
 let shuttingDown = false;
-/** Guards against overlapping recovery attempts. */
-let recovering = false;
 let watchdogTimer: NodeJS.Timeout | null = null;
 
 const CONNECT_OPTIONS = {
@@ -183,42 +181,36 @@ async function resolveAndConnect(): Promise<'configured' | 'local' | 'managed'> 
  *
  * Mongoose retries a server that went down, which is right for a restart or a
  * network blip. It cannot help when the server is never coming back -- a
- * managed instance whose owning process exited, for example. After a grace
- * period this tears the connection down and resolves a database from scratch.
+ * Reports a database that has been unreachable for a while.
  *
- * Only ever runs in development: with an explicit `MONGO_URI` the right
- * behaviour is to keep retrying the database the operator actually chose.
+ * Deliberately reports and does nothing else. An earlier version of this tried
+ * to *recover* -- force-closing the connection and resolving a new database
+ * after eight seconds. That was wrong twice over: an idle MongoDB drops
+ * connections routinely and the driver reconnects on its own, so the watchdog
+ * kept interrupting a recovery already in progress; and
+ * `connection.close(true)` leaves the connection object unusable, so every
+ * later query failed with "Connection was force closed".
+ *
+ * The driver's own reconnection handles every case that actually occurs: a
+ * transient drop, and a MongoDB that restarts. A server that is gone for good
+ * needs a human, and this tells them so.
  */
-function startWatchdog(): void {
-  if (env.MONGO_URI || env.isTest) return;
+function reportPersistentDisconnect(): void {
+  if (env.isTest) return;
 
-  const GRACE_MS = 8000;
+  const GRACE_MS = 30_000;
 
   mongoose.connection.on('disconnected', () => {
-    if (shuttingDown || recovering || watchdogTimer) return;
+    if (shuttingDown || watchdogTimer) return;
 
     watchdogTimer = setTimeout(() => {
       watchdogTimer = null;
-      if (shuttingDown || recovering) return;
-      if (mongoose.connection.readyState === 1) return; // Recovered on its own.
+      if (shuttingDown || mongoose.connection.readyState === 1) return;
 
-      recovering = true;
-      logger.warn('The development database has not come back; looking for another one.');
-
-      void (async () => {
-        try {
-          // A fresh start: the old connection is pinned to a server that is gone.
-          await mongoose.connection.close(true).catch(() => {});
-          managedInstance = null;
-          const source = await resolveAndConnect();
-          await syncIndexes();
-          logger.info({ source }, 'Database connection re-established');
-        } catch (error) {
-          logger.error({ err: error }, 'Could not re-establish a database connection');
-        } finally {
-          recovering = false;
-        }
-      })();
+      logger.error(
+        'The database has been unreachable for 30 seconds. The driver is still retrying; ' +
+          'if this persists, check that MongoDB is running and restart the server.',
+      );
     }, GRACE_MS);
     watchdogTimer.unref?.();
   });
@@ -244,7 +236,7 @@ export async function connectDatabase(): Promise<typeof mongoose> {
   shuttingDown = false;
   configureMongoose();
   attachConnectionListeners();
-  startWatchdog();
+  reportPersistentDisconnect();
 
   const source = await resolveAndConnect();
   await syncIndexes();

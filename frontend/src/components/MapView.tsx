@@ -16,6 +16,7 @@ import {
   TileLayer,
   ZoomControl,
   useMap,
+  useMapEvents,
 } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -40,6 +41,12 @@ export interface MapViewProps {
   focusedAmbulanceId?: string | null;
   className?: string;
   interactive?: boolean;
+  /**
+   * When set, clicking the map reports that point instead of doing nothing.
+   * Used by the SOS screen so a caller whose browser will not share GPS can
+   * still say where they are.
+   */
+  onSelectLocation?: ((point: LatLng) => void) | undefined;
 }
 
 /** Hyderabad, the city this deployment serves. */
@@ -72,6 +79,26 @@ function AutoFit({ points }: { points: LatLng[] }) {
     );
     map.fitBounds(bounds, { padding: [56, 56], maxZoom: 16, animate: true });
   }, [map, signature, points]);
+
+  return null;
+}
+
+/** Turns a map click into a coordinate, and shows a crosshair cursor while armed. */
+function ClickToSelect({ onSelect }: { onSelect: (point: LatLng) => void }) {
+  const map = useMapEvents({
+    click(event) {
+      onSelect({ lat: event.latlng.lat, lng: event.latlng.lng });
+    },
+  });
+
+  useEffect(() => {
+    const container = map.getContainer();
+    const previous = container.style.cursor;
+    container.style.cursor = 'crosshair';
+    return () => {
+      container.style.cursor = previous;
+    };
+  }, [map]);
 
   return null;
 }
@@ -111,6 +138,7 @@ export function MapView({
   focusedAmbulanceId = null,
   className = '',
   interactive = true,
+  onSelectLocation,
 }: MapViewProps) {
   const routePoints = useMemo(
     () => (route?.points ?? []).map((point) => [point.lat, point.lng] as [number, number]),
@@ -149,6 +177,7 @@ export function MapView({
 
         <ResizeHandler />
         <AutoFit points={framePoints} />
+        {onSelectLocation && <ClickToSelect onSelect={onSelectLocation} />}
 
         {routePoints.length > 1 && (
           <>

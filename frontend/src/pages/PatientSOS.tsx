@@ -15,6 +15,7 @@ import {
   Building2,
   Crosshair,
   Droplet,
+  MapPin,
   Navigation,
   Phone,
   Siren,
@@ -30,6 +31,7 @@ import {
   type EmergencyRequestDto,
   type EmergencyType,
   type HospitalDto,
+  type LatLng,
 } from '@sas/shared';
 import { api, errorMessage } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -72,6 +74,19 @@ export function PatientSOS() {
   const [nearby, setNearby] = useState<AmbulanceDto[]>([]);
   const [hospitals, setHospitals] = useState<HospitalDto[]>([]);
 
+  /**
+   * A point the caller placed by hand.
+   *
+   * Browsers refuse GPS outright if permission was once denied, and the refusal
+   * is remembered -- which would otherwise leave the SOS button permanently
+   * disabled with no way back. Dropping a pin is the fallback, and it takes
+   * precedence when set because the caller knows better than the device.
+   */
+  const [manualPosition, setManualPosition] = useState<LatLng | null>(null);
+  const [pickingLocation, setPickingLocation] = useState(false);
+
+  const position = manualPosition ?? geo.position;
+
   /** Load whatever case is already running for this caller. */
   useEffect(() => {
     api
@@ -83,8 +98,8 @@ export function PatientSOS() {
 
   /** Show what is around the caller while they are deciding. */
   useEffect(() => {
-    if (!geo.position || activeCase) return;
-    const params = { lat: geo.position.lat, lng: geo.position.lng, radiusKm: 12 };
+    if (!position || activeCase) return;
+    const params = { lat: position.lat, lng: position.lng, radiusKm: 12 };
 
     void api
       .get<{ items: AmbulanceDto[] }>('/ambulances/nearby', { params })
@@ -95,7 +110,7 @@ export function PatientSOS() {
       .get<{ items: HospitalDto[] }>('/hospitals/nearby', { params: { ...params, limit: 8 } })
       .then((response) => setHospitals(response.data.items))
       .catch(() => setHospitals([]));
-  }, [geo.position, activeCase]);
+  }, [position, activeCase]);
 
   // Follow the case's own room, so updates arrive without polling. Keyed on the
   // id alone: re-subscribing on every field change would churn the room.
@@ -157,7 +172,7 @@ export function PatientSOS() {
   });
 
   const raiseEmergency = useCallback(async (): Promise<void> => {
-    if (!geo.position) {
+    if (!position) {
       setError('We need your location before an ambulance can be sent.');
       return;
     }
@@ -167,7 +182,7 @@ export function PatientSOS() {
     try {
       const response = await api.post<{ request: EmergencyRequestDto }>('/emergency', {
         emergencyType,
-        pickup: geo.position,
+        pickup: position,
         notes: notes.trim() || undefined,
         vitals,
       });
@@ -180,7 +195,7 @@ export function PatientSOS() {
     } finally {
       setSubmitting(false);
     }
-  }, [geo.position, emergencyType, notes, vitals]);
+  }, [position, emergencyType, notes, vitals]);
 
   const cancelCase = useCallback(async (): Promise<void> => {
     if (!activeCase) return;
@@ -213,30 +228,60 @@ export function PatientSOS() {
 
           <div className="flex flex-col items-center px-6 py-8">
             <SosButton
-              disabled={!geo.position || submitting}
+              disabled={!position || submitting}
               busy={submitting}
               onPress={() => setConfirming(true)}
             />
 
             <div className="mt-6 w-full space-y-2">
-              {geo.error && <ErrorNotice message={geo.error} />}
+              {/* The GPS error is only worth showing while there is no usable
+                  position at all; once a pin is dropped it is just noise. */}
+              {geo.error && !position && <ErrorNotice message={geo.error} />}
               {error && <ErrorNotice message={error} />}
+
+              {pickingLocation && (
+                <div className="flex items-start gap-2.5 rounded-xl border border-sky-700/50 bg-sky-950/40 px-3.5 py-3 text-sm text-sky-200">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  <span>Click the map to mark where you are.</span>
+                </div>
+              )}
 
               <div className="flex items-center justify-between rounded-xl border border-ink-700 bg-ink-900/60 px-3.5 py-2.5">
                 <span className="flex items-center gap-2 text-sm text-ink-300">
                   <Crosshair
-                    className={`h-4 w-4 ${geo.position ? 'text-emerald-400' : 'text-amber-400'}`}
+                    className={`h-4 w-4 ${position ? 'text-emerald-400' : 'text-amber-400'}`}
                     aria-hidden
                   />
-                  {geo.loading
-                    ? 'Finding your location'
-                    : geo.position
-                      ? `Located to ${Math.round(geo.accuracy ?? 0)} m`
-                      : 'Location unavailable'}
+                  {manualPosition
+                    ? 'Location set on the map'
+                    : geo.loading
+                      ? 'Finding your location'
+                      : geo.position
+                        ? `Located to ${Math.round(geo.accuracy ?? 0)} m`
+                        : 'Location unavailable'}
                 </span>
-                <button type="button" onClick={geo.refresh} className="btn-ghost px-2 py-1 text-xs">
-                  Refresh
-                </button>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPickingLocation((on) => !on)}
+                    className="btn-ghost px-2 py-1 text-xs"
+                  >
+                    {pickingLocation ? 'Done' : manualPosition ? 'Move pin' : 'Set on map'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Hand control back to the device.
+                      setManualPosition(null);
+                      setPickingLocation(false);
+                      geo.refresh();
+                    }}
+                    className="btn-ghost px-2 py-1 text-xs"
+                  >
+                    Use GPS
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -314,10 +359,20 @@ export function PatientSOS() {
       <Card className="min-h-[420px] overflow-hidden p-0 lg:min-h-0">
         <MapView
           className="h-full min-h-[420px] w-full"
-          centre={geo.position ?? undefined}
-          patient={geo.position}
+          centre={position ?? undefined}
+          patient={position}
           ambulances={nearby}
           hospitals={hospitals}
+          onSelectLocation={
+            pickingLocation
+              ? (point) => {
+                  setManualPosition(point);
+                  setPickingLocation(false);
+                  setError(null);
+                  toast.success('Location set. You can press SOS now.');
+                }
+              : undefined
+          }
         />
       </Card>
 
