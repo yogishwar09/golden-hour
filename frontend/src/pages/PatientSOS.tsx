@@ -259,7 +259,21 @@ export function PatientSOS() {
               onPress={() => setConfirming(true)}
             />
 
-            <div className="mt-6 w-full space-y-2">
+            {/* The button is the only way to request an ambulance, and a large
+                red circle does not say so on its own. This is the caption that
+                tells a first-time caller what it does, and what is missing
+                when it will not respond. */}
+            <p className="mt-5 text-center text-sm font-semibold text-ink-200">
+              {position ? (
+                <>
+                  Press <span className="text-emergency-300">SOS</span> to request an ambulance
+                </>
+              ) : (
+                'Set your location first, then press SOS'
+              )}
+            </p>
+
+            <div className="mt-4 w-full space-y-2">
               {/* The GPS error is only worth showing while there is no usable
                   position at all; once a pin is dropped it is just noise. */}
               {geo.error && !position && <ErrorNotice message={geo.error} />}
