@@ -385,6 +385,8 @@ class SimulatedCrew {
       const metresThisTick =
         (this.busy ? RESPONSE_SPEED_MPS : IDLE_SPEED_MPS) * options.speed * (TICK_MS / 1000);
 
+      const before = { ...this.position };
+
       if (this.busy && this.path.length > 0) {
         this.followPath(metresThisTick);
       } else if (this.busy && this.destination) {
@@ -395,10 +397,15 @@ class SimulatedCrew {
         this.wander(metresThisTick);
       }
 
+      // Derived from the ground actually covered, not from the speed the
+      // vehicle would travel if it were moving. A crew parked on scene reports
+      // a real zero rather than a cruising speed nobody is doing.
+      const movedMetres = haversineMetres(before, this.position);
+
       this.socket?.emit('driver:location', {
         lat: this.position.lat,
         lng: this.position.lng,
-        speed: this.busy ? RESPONSE_SPEED_MPS : IDLE_SPEED_MPS,
+        speed: movedMetres / (TICK_MS / 1000) / options.speed,
       });
 
       await sleep(TICK_MS);

@@ -177,19 +177,19 @@ async function resolveAndConnect(): Promise<'configured' | 'local' | 'managed'> 
 }
 
 /**
- * Recovers from a development database that has gone away for good.
+ * Reports a database that has genuinely stopped answering.
  *
- * Mongoose retries a server that went down, which is right for a restart or a
- * network blip. It cannot help when the server is never coming back -- a
- * Reports a database that has been unreachable for a while.
+ * Deliberately reports and does nothing else. An earlier version tried to
+ * *recover* -- force-closing the connection and resolving a new database after
+ * eight seconds. That was wrong twice over: an idle MongoDB drops connections
+ * routinely and the driver reconnects on its own, so the watchdog kept
+ * interrupting a recovery already in progress; and `connection.close(true)`
+ * leaves the connection object unusable, so every later query failed with
+ * "Connection was force closed".
  *
- * Deliberately reports and does nothing else. An earlier version of this tried
- * to *recover* -- force-closing the connection and resolving a new database
- * after eight seconds. That was wrong twice over: an idle MongoDB drops
- * connections routinely and the driver reconnects on its own, so the watchdog
- * kept interrupting a recovery already in progress; and
- * `connection.close(true)` leaves the connection object unusable, so every
- * later query failed with "Connection was force closed".
+ * The version after that was merely noisy: it trusted `readyState`, and so
+ * logged an outage every time a quiet connection went idle -- around a hundred
+ * false alarms in a day. It now asks the database before saying anything.
  *
  * The driver's own reconnection handles every case that actually occurs: a
  * transient drop, and a MongoDB that restarts. A server that is gone for good
@@ -205,15 +205,61 @@ function reportPersistentDisconnect(): void {
 
     watchdogTimer = setTimeout(() => {
       watchdogTimer = null;
-      if (shuttingDown || mongoose.connection.readyState === 1) return;
+      if (shuttingDown) return;
 
-      logger.error(
-        'The database has been unreachable for 30 seconds. The driver is still retrying; ' +
-          'if this persists, check that MongoDB is running and restart the server.',
-      );
+      void (async () => {
+        // Ask the database, rather than reading `readyState`. MongoDB closes
+        // idle connections and the driver reconnects on the next operation, so
+        // a disconnected state with no traffic is normal and healthy. Reporting
+        // it as an outage cried wolf roughly every fifteen minutes.
+        if (await isDatabaseReachable()) {
+          logger.debug('The connection went idle; the driver has it in hand.');
+          return;
+        }
+
+        logger.error(
+          'The database has been unreachable for 30 seconds. The driver is still retrying; ' +
+            'if this persists, check that MongoDB is running and restart the server.',
+        );
+      })();
     }, GRACE_MS);
     watchdogTimer.unref?.();
   });
+}
+
+export type DatabaseState = 'disconnected' | 'connected' | 'connecting' | 'disconnecting';
+
+/**
+ * Whether the database will actually answer.
+ *
+ * A real command, not a state flag: the driver reconnects lazily, so the only
+ * honest test of reachability is to ask it something. Used by the readiness
+ * probe and by the disconnect reporting above.
+ */
+export async function isDatabaseReachable(): Promise<boolean> {
+  try {
+    const admin = mongoose.connection.db?.admin();
+    if (!admin) return false;
+    await admin.command({ ping: 1 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether the API should report itself ready, given a connection state.
+ *
+ * Takes the state as an argument rather than reading it, so the rule can be
+ * tested without mocking the driver's internals. The rule itself: a state of
+ * anything other than `connected` is a question, not an answer -- the driver
+ * reconnects lazily, so an idle instance reads as disconnected while being
+ * perfectly able to serve. Only a database that will not answer a command
+ * makes an instance unready.
+ */
+export async function evaluateReadiness(state: DatabaseState): Promise<boolean> {
+  if (state === 'connected') return true;
+  return isDatabaseReachable();
 }
 
 function attachConnectionListeners(): void {
@@ -261,8 +307,6 @@ export async function disconnectDatabase(): Promise<void> {
     managedInstance = null;
   }
 }
-
-export type DatabaseState = 'disconnected' | 'connected' | 'connecting' | 'disconnecting';
 
 export function databaseState(): DatabaseState {
   // Mongoose also uses 99 for "uninitialized", which is not in this list.

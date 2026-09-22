@@ -6,7 +6,7 @@
  * state their case is in, this is the screen.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
@@ -110,6 +110,8 @@ export function PatientSOS() {
 
   /** A case that has just ended, held so its outcome can be shown. */
   const [finishedCase, setFinishedCase] = useState<EmergencyRequestDto | null>(null);
+  /** Outcomes the caller has read and closed; they must not come back. */
+  const dismissed = useRef<Set<string>>(new Set());
   const [serviceStats, setServiceStats] = useState<ServiceStatsDto | null>(null);
   const [myStats, setMyStats] = useState<MyStatsDto | null>(null);
 
@@ -193,14 +195,20 @@ export function PatientSOS() {
   }, [socket, activeCaseId]);
 
   useSocketEvent('request:updated', (updated) => {
-    setActiveCase((previous) => {
-      if (previous && previous.id !== updated.id) return previous;
-      if (LIVE_STATUSES.has(updated.status)) return updated;
-      // The case has ended. Hold onto it so the caller gets an outcome rather
-      // than the screen silently reverting to the SOS button.
-      setFinishedCase(updated);
-      return null;
-    });
+    // An event about a case that is not the one on screen, or one whose outcome
+    // has already been read and dismissed, is not ours to act on. Without this
+    // a straggling update would pop the summary back up after it was closed.
+    if (dismissed.current.has(updated.id)) return;
+    if (activeCase && activeCase.id !== updated.id) return;
+
+    if (LIVE_STATUSES.has(updated.status)) {
+      setActiveCase(updated);
+      return;
+    }
+    // The case has ended. Hold onto it so the caller gets an outcome rather
+    // than the screen silently reverting to the SOS button.
+    setActiveCase(null);
+    setFinishedCase(updated);
   });
 
   useSocketEvent('request:created', (created) => {
@@ -209,16 +217,16 @@ export function PatientSOS() {
   });
 
   useSocketEvent('request:status', (event) => {
-    setActiveCase((previous) => {
-      if (!previous || previous.id !== event.requestId) return previous;
-      if (!LIVE_STATUSES.has(event.status)) {
-        // `request:updated` carries the full case and will populate the
-        // summary; this only has to clear the live view.
-        setFinishedCase((already) => already ?? { ...previous, status: event.status });
-        return null;
-      }
-      return { ...previous, status: event.status };
-    });
+    if (!activeCase || activeCase.id !== event.requestId) return;
+
+    if (LIVE_STATUSES.has(event.status)) {
+      setActiveCase({ ...activeCase, status: event.status });
+      return;
+    }
+    // `request:updated` carries the full case and will replace this; the status
+    // event only has to get the live view off the screen.
+    setActiveCase(null);
+    setFinishedCase((already) => already ?? { ...activeCase, status: event.status });
   });
 
   useSocketEvent('request:eta', (event) => {
@@ -293,7 +301,14 @@ export function PatientSOS() {
 
   if (finishedCase) {
     return (
-      <CaseOutcome caseData={finishedCase} myStats={myStats} onDone={() => setFinishedCase(null)} />
+      <CaseOutcome
+        caseData={finishedCase}
+        myStats={myStats}
+        onDone={() => {
+          dismissed.current.add(finishedCase.id);
+          setFinishedCase(null);
+        }}
+      />
     );
   }
 
