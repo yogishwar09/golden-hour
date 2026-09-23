@@ -28,6 +28,7 @@ import {
   rooms,
   toLatLng,
   vehicleMeets,
+  vehicleTypesMeeting,
   type AmbulanceType,
   type DispatchOfferDto,
   type LatLng,
@@ -104,6 +105,11 @@ export async function findCandidates(
     status: 'AVAILABLE',
     isActive: true,
     activeRequest: null,
+    // Capability is part of the query, not a filter on its results. Checking it
+    // afterwards let nearer but unsuitable vehicles crowd a suitable one out of
+    // the fetched window, and the case was then declared unservable with a
+    // capable ambulance sitting inside the search radius.
+    type: { $in: vehicleTypesMeeting(requiredType) },
     ...(excluded.length ? { _id: { $nin: excluded } } : {}),
     location: {
       $nearSphere: {
@@ -112,16 +118,12 @@ export async function findCandidates(
       },
     },
   })
-    // Over-fetch, because the capability filter below removes some results and
-    // `$nearSphere` cannot express "rank at least this tier" on its own.
-    .limit(limit * 4)
+    .limit(limit)
     .populate('driver', 'name phone')
     .exec();
 
   const candidates: Candidate[] = [];
   for (const vehicle of vehicles) {
-    if (!vehicleMeets(vehicle.type, requiredType)) continue;
-
     const position = toLatLng(vehicle.location);
     if (!position) continue;
 

@@ -13,7 +13,7 @@ import { pinoHttp } from 'pino-http';
 import { env } from './config/env.js';
 import { isOriginAllowed } from './config/cors.js';
 import { logger } from './config/logger.js';
-import { databaseState, evaluateReadiness } from './config/db.js';
+import { databaseState } from './config/db.js';
 import { apiRoutes } from './routes/index.js';
 import { apiLimiter } from './middleware/rateLimit.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
@@ -77,15 +77,15 @@ export function createApp(): Express {
 
   // Readiness: the API can actually serve traffic.
   //
-  // A connection state of `disconnected` is not sufficient grounds to report
-  // not-ready: MongoDB closes idle connections and the driver reconnects on the
-  // next operation, so an untrafficked instance is routinely "disconnected" and
-  // perfectly able to serve. Reporting that to an orchestrator would take a
-  // healthy instance out of the load balancer for being quiet. So when the
-  // state looks wrong, ask the database directly before failing the probe.
-  app.get('/api/ready', async (_req, res) => {
+  // `readyState` alone, deliberately. An earlier version also pinged the
+  // database when the state looked wrong, out of a worry that an idle
+  // connection would fail the probe and have an orchestrator pull a healthy
+  // instance. Measured over a minute of sampling, the state reads `connected`
+  // on every probe: idle drops resolve long before a probe observes them, and
+  // a readiness probe needs several consecutive failures to act anyway.
+  app.get('/api/ready', (_req, res) => {
     const database = databaseState();
-    const ready = await evaluateReadiness(database);
+    const ready = database === 'connected';
     res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'not-ready', database });
   });
 

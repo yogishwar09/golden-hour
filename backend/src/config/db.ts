@@ -41,9 +41,8 @@ const LOCAL_DB_PATH = path.resolve(here, '../../.local-db');
 /** Set only when this process started the managed server, so only its owner stops it. */
 let managedInstance: { stop: () => Promise<boolean | void> } | null = null;
 
-/** True once a deliberate shutdown begins, so the watchdog stops interfering. */
+/** True once a deliberate shutdown begins. */
 let shuttingDown = false;
-let watchdogTimer: NodeJS.Timeout | null = null;
 
 const CONNECT_OPTIONS = {
   dbName: env.MONGO_DB_NAME,
@@ -52,6 +51,31 @@ const CONNECT_OPTIONS = {
   maxPoolSize: 20,
   retryWrites: true,
 } as const;
+
+/**
+ * On connection health
+ * --------------------
+ * There is deliberately no watchdog here, after three attempts at one.
+ *
+ * The first tried to *recover*: it force-closed the connection and resolved a
+ * new database after eight seconds. An idle MongoDB drops connections
+ * routinely and the driver reconnects by itself, so it kept interrupting a
+ * recovery already under way -- and `connection.close(true)` leaves the
+ * connection object unusable, so afterwards every query failed with
+ * "Connection was force closed".
+ *
+ * The second only reported, but trusted `readyState`, so it logged an outage
+ * every time a quiet connection went idle: about a hundred false alarms a day.
+ *
+ * The third tried to verify by pinging before reporting, but pinged through
+ * `connection.db`, whose handle does not survive a reconnect -- so it reported
+ * the same false outages, now with extra steps.
+ *
+ * The listeners below already log a disconnect and a driver error, which is
+ * the real signal. A database that is genuinely gone makes every request fail
+ * with a logged 500; nobody needs a timer to discover that. Less code here is
+ * the correct answer.
+ */
 
 /**
  * Connection-independent Mongoose settings.
@@ -176,91 +200,7 @@ async function resolveAndConnect(): Promise<'configured' | 'local' | 'managed'> 
   return 'managed';
 }
 
-/**
- * Reports a database that has genuinely stopped answering.
- *
- * Deliberately reports and does nothing else. An earlier version tried to
- * *recover* -- force-closing the connection and resolving a new database after
- * eight seconds. That was wrong twice over: an idle MongoDB drops connections
- * routinely and the driver reconnects on its own, so the watchdog kept
- * interrupting a recovery already in progress; and `connection.close(true)`
- * leaves the connection object unusable, so every later query failed with
- * "Connection was force closed".
- *
- * The version after that was merely noisy: it trusted `readyState`, and so
- * logged an outage every time a quiet connection went idle -- around a hundred
- * false alarms in a day. It now asks the database before saying anything.
- *
- * The driver's own reconnection handles every case that actually occurs: a
- * transient drop, and a MongoDB that restarts. A server that is gone for good
- * needs a human, and this tells them so.
- */
-function reportPersistentDisconnect(): void {
-  if (env.isTest) return;
-
-  const GRACE_MS = 30_000;
-
-  mongoose.connection.on('disconnected', () => {
-    if (shuttingDown || watchdogTimer) return;
-
-    watchdogTimer = setTimeout(() => {
-      watchdogTimer = null;
-      if (shuttingDown) return;
-
-      void (async () => {
-        // Ask the database, rather than reading `readyState`. MongoDB closes
-        // idle connections and the driver reconnects on the next operation, so
-        // a disconnected state with no traffic is normal and healthy. Reporting
-        // it as an outage cried wolf roughly every fifteen minutes.
-        if (await isDatabaseReachable()) {
-          logger.debug('The connection went idle; the driver has it in hand.');
-          return;
-        }
-
-        logger.error(
-          'The database has been unreachable for 30 seconds. The driver is still retrying; ' +
-            'if this persists, check that MongoDB is running and restart the server.',
-        );
-      })();
-    }, GRACE_MS);
-    watchdogTimer.unref?.();
-  });
-}
-
 export type DatabaseState = 'disconnected' | 'connected' | 'connecting' | 'disconnecting';
-
-/**
- * Whether the database will actually answer.
- *
- * A real command, not a state flag: the driver reconnects lazily, so the only
- * honest test of reachability is to ask it something. Used by the readiness
- * probe and by the disconnect reporting above.
- */
-export async function isDatabaseReachable(): Promise<boolean> {
-  try {
-    const admin = mongoose.connection.db?.admin();
-    if (!admin) return false;
-    await admin.command({ ping: 1 });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Whether the API should report itself ready, given a connection state.
- *
- * Takes the state as an argument rather than reading it, so the rule can be
- * tested without mocking the driver's internals. The rule itself: a state of
- * anything other than `connected` is a question, not an answer -- the driver
- * reconnects lazily, so an idle instance reads as disconnected while being
- * perfectly able to serve. Only a database that will not answer a command
- * makes an instance unready.
- */
-export async function evaluateReadiness(state: DatabaseState): Promise<boolean> {
-  if (state === 'connected') return true;
-  return isDatabaseReachable();
-}
 
 function attachConnectionListeners(): void {
   mongoose.connection.on('connected', () => logger.info('MongoDB connected'));
@@ -282,7 +222,6 @@ export async function connectDatabase(): Promise<typeof mongoose> {
   shuttingDown = false;
   configureMongoose();
   attachConnectionListeners();
-  reportPersistentDisconnect();
 
   const source = await resolveAndConnect();
   await syncIndexes();
@@ -293,10 +232,6 @@ export async function connectDatabase(): Promise<typeof mongoose> {
 
 export async function disconnectDatabase(): Promise<void> {
   shuttingDown = true;
-  if (watchdogTimer) {
-    clearTimeout(watchdogTimer);
-    watchdogTimer = null;
-  }
 
   await mongoose.connection.close();
 

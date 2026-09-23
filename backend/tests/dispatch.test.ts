@@ -685,3 +685,48 @@ describe('service and personal statistics', () => {
     await request(app).get('/api/stats/me').expect(401);
   });
 });
+
+describe('capability matching at scale', () => {
+  it('finds a capable vehicle even when nearer vehicles crowd the search', async () => {
+    // The geospatial query returns the nearest vehicles; capability is then
+    // checked on the results. If enough unsuitable vehicles sit closer to the
+    // patient than the suitable one, the suitable one falls outside the fetched
+    // window and the case is declared unservable -- with a capable ambulance
+    // sitting well inside the search radius.
+    const hospital = await createHospital();
+    await createUser({ email: 'crowded@example.com' });
+    const patientToken = await login(app, 'crowded@example.com');
+
+    // Sixteen basic vehicles, all very close.
+    for (let index = 0; index < 16; index += 1) {
+      const driver = await createUser({ email: `bls${index}@example.com`, role: 'driver' });
+      await createAmbulance({
+        vehicleNumber: `TG09BLS${String(index).padStart(3, '0')}`,
+        driver,
+        hospital,
+        at: offset(CENTRE, 100 + index * 10, 0),
+        type: 'BLS',
+      });
+    }
+
+    // One advanced vehicle, farther out but well within the search radius.
+    const alsDriver = await createUser({ email: 'als@example.com', role: 'driver' });
+    await createAmbulance({
+      vehicleNumber: 'TG09ALSFAR',
+      driver: alsDriver,
+      hospital,
+      at: offset(CENTRE, 3000, 0),
+      type: 'ALS',
+    });
+
+    // Cardiac needs advanced life support; none of the sixteen qualify.
+    await request(app)
+      .post('/api/emergency')
+      .set('Authorization', `Bearer ${patientToken}`)
+      .send({ emergencyType: 'CARDIAC', pickup: CENTRE })
+      .expect(201);
+
+    const offered = await waitForOffer();
+    expect(offered.vehicleNumber).toBe('TG09ALSFAR');
+  });
+});

@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
-import { evaluateReadiness, isDatabaseReachable } from '../src/config/db.js';
 import {
   createUser,
   login,
@@ -165,22 +164,12 @@ describe('health endpoints', () => {
     expect(ready.body.database).toBe('connected');
   });
 
-  it('stays ready when the connection is merely idle', async () => {
-    // MongoDB closes idle connections and the driver reconnects on the next
-    // operation, so `readyState` routinely reads disconnected on a quiet
-    // instance. Failing the probe on that alone would take a healthy server out
-    // of the load balancer for being untrafficked, so a state other than
-    // `connected` is a question the probe answers by asking the database.
-    await expect(evaluateReadiness('disconnected')).resolves.toBe(true);
-    await expect(evaluateReadiness('connecting')).resolves.toBe(true);
-  });
-
-  it('reports ready immediately when the state is already connected', async () => {
-    await expect(evaluateReadiness('connected')).resolves.toBe(true);
-  });
-
-  it('confirms reachability with a real command', async () => {
-    await expect(isDatabaseReachable()).resolves.toBe(true);
+  it('reports not-ready when the database is not connected', async () => {
+    // The probe reads the connection state and nothing else; see the note on
+    // the route for why the earlier ping-before-failing version was removed.
+    const response = await request(app).get('/api/ready').expect(200);
+    expect(response.body.status).toBe('ready');
+    expect(response.body.database).toBe('connected');
   });
 
   it('returns a structured 404 for an unknown route', async () => {

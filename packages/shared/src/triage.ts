@@ -8,7 +8,7 @@
  */
 
 import type { AmbulanceType, EmergencyType, Priority } from './enums.js';
-import { AMBULANCE_TYPE_RANK } from './enums.js';
+import { AMBULANCE_TYPE_RANK, AMBULANCE_TYPES } from './enums.js';
 
 /** Vitals a caller (or a first responder) can report alongside the request. */
 export interface ReportedVitals {
@@ -106,4 +106,16 @@ export function triage(emergencyType: EmergencyType, vitals: ReportedVitals = {}
 /** True when `candidate` is clinically capable of taking a case needing `required`. */
 export function vehicleMeets(candidate: AmbulanceType, required: AmbulanceType): boolean {
   return AMBULANCE_TYPE_RANK[candidate] >= AMBULANCE_TYPE_RANK[required];
+}
+
+/**
+ * Every vehicle type capable of taking a case needing `required`.
+ *
+ * Exists so capability can be expressed as a database filter rather than
+ * checked on query results. Filtering afterwards means nearer but unsuitable
+ * vehicles can crowd a suitable one out of the fetched window, and the case is
+ * then declared unservable while a capable ambulance sits inside the radius.
+ */
+export function vehicleTypesMeeting(required: AmbulanceType): AmbulanceType[] {
+  return AMBULANCE_TYPES.filter((type) => vehicleMeets(type, required));
 }
