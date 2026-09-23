@@ -25,7 +25,8 @@
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run build:shared && npm run typecheck --workspaces --if-present",
     "format": "prettier --write \"**/*.{ts,tsx,json}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,json}\""
+    "format:check": "prettier --check \"**/*.{ts,tsx,json}\"",
+    "coverage": "npm run coverage --workspace @sas/backend"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

@@ -33,11 +33,29 @@ npm run dev      # API on :4000, web on :5173
 ```
 
 The seed data covers **Hyderabad**: nine real hospitals from Osmania General and
-Gandhi to NIMS, Apollo Jubilee Hills and AIG Gachibowli, with a ten-vehicle
-fleet spread from the old city to Secunderabad and the western IT corridor.
+Gandhi to NIMS, Apollo Jubilee Hills and AIG Gachibowli, and a fleet of 120
+ambulances on patrol across the city.
+
+The fleet is not parked at the hospitals. Vehicles sit on a hexagonal patrol
+grid over the GHMC area, because a service parks where the people are, not
+where the hospitals are -- the hospital is chosen after the patient is aboard.
+The spacing is set so that from anywhere in the service area the nearest
+ambulance is close:
+
+```bash
+npm run coverage     # measures it
+```
+
+> Nearest ambulance: average 1.10 km, worst case 2.53 km
+> At Charminar 0.76 km, HITEC City 0.17 km, Secunderabad 1.22 km
+
+Two cells in three carry advanced life support, because a cardiac, stroke or
+trauma call may not be sent a basic vehicle -- so the distance that matters for
+those is to a *suitable* ambulance, not merely a near one.
+
 Map tiles are global OpenStreetMap, so serving a different city is a matter of
-editing `backend/src/scripts/seed.ts` and the default centre in
-`frontend/src/components/MapView.tsx`.
+editing `COVERAGE` in `backend/src/scripts/fleet.ts`, the hospitals in
+`seed.ts`, and the default centre in `frontend/src/components/MapView.tsx`.
 
 Open <http://localhost:5173>.
 
@@ -346,7 +364,8 @@ See `.env.example` for every setting.
 | --- | --- |
 | `npm run dev` | API and web together, both with hot reload |
 | `npm run seed` | Reset to a known demo dataset |
-| `npm run simulate` | Drive the seeded fleet in real time (`-- --speed 8` to compress it for a demo) |
+| `npm run simulate` | Drive all 120 crews in real time (`-- --speed 8` to compress it for a demo) |
+| `npm run coverage` | Report how far the nearest ambulance is, across the service area |
 | `npm test` | The full test suite |
 | `npm run typecheck` | Typecheck every workspace |
 | `npm run build` | Production build of everything |

@@ -11,11 +11,30 @@ import rateLimit, { type Options } from 'express-rate-limit';
 import type { Request } from 'express';
 import { env } from '../config/env.js';
 
+/**
+ * Loopback addresses, in the forms Node reports them.
+ *
+ * Traffic from the machine itself is exempt from rate limiting in development
+ * only. The fleet simulator signs in as every crew at once, which from one
+ * address is indistinguishable from credential stuffing -- and being throttled
+ * left most of the fleet with nobody driving it. A developer's own machine is
+ * not the threat these limits exist for. In production every request is
+ * counted, wherever it came from.
+ */
+const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+
+function isExempt(req: Request): boolean {
+  if (env.isTest) return true;
+  if (env.isProduction) return false;
+  return LOOPBACK.has(req.ip ?? '');
+}
+
 const shared: Partial<Options> = {
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  // The limiter would otherwise make the whole test suite flaky.
-  skip: () => env.isTest,
+  // The limiter would otherwise make the whole test suite flaky, and would
+  // throttle the simulator's fleet-wide sign-in during development.
+  skip: isExempt,
   message: {
     error: { code: 'RATE_LIMITED', message: 'Too many requests, please slow down.' },
   },

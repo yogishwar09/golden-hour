@@ -24,6 +24,7 @@ import {
   type LatLng,
 } from '@sas/shared';
 import { env } from '../config/env.js';
+import { buildFleet, FLEET_SIZE } from './fleet.js';
 
 interface Options {
   apiUrl: string;
@@ -38,16 +39,21 @@ function parseOptions(): Options {
     return index >= 0 ? args[index + 1] : undefined;
   };
 
-  const count = Number(read('--drivers') ?? 10);
+  // Every seeded crew by default: a vehicle with no crew logged in is still
+  // AVAILABLE and still gets offered cases, and nobody answers -- so a partly
+  // crewed fleet means dispatch stalls on offer timeouts.
+  const count = Math.min(Number(read('--drivers') ?? FLEET_SIZE), FLEET_SIZE);
   return {
     apiUrl: read('--api') ?? `http://localhost:${env.PORT}`,
     // Real time by default: an ambulance that crosses the city in ten seconds
     // does not look like an ambulance. `--speed` compresses it when someone is
     // watching a demo rather than the system.
     speed: Math.max(1, Math.min(20, Number(read('--speed') ?? 1))),
-    drivers: Array.from({ length: count }, (_, index) =>
-      index === 0 ? 'driver@demo.test' : `driver${index + 1}@demo.test`,
-    ),
+    // Taken from the fleet definition rather than reconstructed, so the
+    // simulator and the seed can never disagree about who exists.
+    drivers: buildFleet()
+      .slice(0, count)
+      .map((crew) => crew.driverEmail),
   };
 }
 
@@ -492,8 +498,9 @@ async function main(): Promise<void> {
     } catch (error) {
       process.stdout.write(`  skipped ${email}: ${(error as Error).message}\n`);
     }
-    // Stagger the logins so ten bcrypt verifications do not land at once.
-    await sleep(250);
+    // Stagger the logins: a hundred-plus bcrypt verifications landing at once
+    // would saturate the API before a single vehicle started moving.
+    await sleep(60);
   }
 
   if (crews.length === 0) {

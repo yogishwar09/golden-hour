@@ -20,7 +20,8 @@ import {
   User,
   hashPassword,
 } from '../models/index.js';
-import type { AmbulanceType, BloodGroup } from '@sas/shared';
+import { haversineMetres, type AmbulanceType, type BloodGroup } from '@sas/shared';
+import { buildFleet } from './fleet.js';
 
 /**
  * Hyderabad. The conventional city point (Abids/Koti), central to the old city,
@@ -117,111 +118,6 @@ const HOSPITALS = [
     traumaLevel: 3,
     beds: 110,
     specialties: ['Emergency', 'Maternity', 'Orthopaedics'],
-  },
-];
-
-interface CrewSpec {
-  vehicleNumber: string;
-  type: AmbulanceType;
-  driverName: string;
-  paramedic: string;
-  hospitalIndex: number;
-  /** Offset from the home hospital, so vehicles are spread across the city. */
-  offsetLat: number;
-  offsetLng: number;
-}
-
-/** Telangana registrations; TG09 is the Hyderabad Central (Khairatabad) RTO. */
-const FLEET: CrewSpec[] = [
-  {
-    vehicleNumber: 'TG09AB1001',
-    type: 'ALS',
-    driverName: 'Ravi Teja',
-    paramedic: 'Sneha Reddy',
-    hospitalIndex: 0,
-    offsetLat: 0.004,
-    offsetLng: 0.006,
-  },
-  {
-    vehicleNumber: 'TG09AB1002',
-    type: 'BLS',
-    driverName: 'Mohammed Imran',
-    paramedic: 'Ayesha Begum',
-    hospitalIndex: 0,
-    offsetLat: -0.008,
-    offsetLng: 0.012,
-  },
-  {
-    vehicleNumber: 'TG09AB1003',
-    type: 'MICU',
-    driverName: 'Srinivas Reddy',
-    paramedic: 'Dr Kavitha Rao',
-    hospitalIndex: 1,
-    offsetLat: 0.006,
-    offsetLng: -0.004,
-  },
-  {
-    vehicleNumber: 'TG09AB1004',
-    type: 'ALS',
-    driverName: 'Venkatesh Rao',
-    paramedic: 'Farhan Ahmed',
-    hospitalIndex: 2,
-    offsetLat: -0.005,
-    offsetLng: -0.01,
-  },
-  {
-    vehicleNumber: 'TG09AB1005',
-    type: 'BLS',
-    driverName: 'Praveen Kumar',
-    paramedic: 'Divya Sharma',
-    hospitalIndex: 3,
-    offsetLat: 0.009,
-    offsetLng: 0.003,
-  },
-  {
-    vehicleNumber: 'TG09AB1006',
-    type: 'NEONATAL',
-    driverName: 'Syed Akbar',
-    paramedic: 'Dr Asha Rani',
-    hospitalIndex: 7,
-    offsetLat: 0.003,
-    offsetLng: 0.008,
-  },
-  {
-    vehicleNumber: 'TG09AB1007',
-    type: 'ALS',
-    driverName: 'Ramesh Goud',
-    paramedic: 'Rohit Varma',
-    hospitalIndex: 5,
-    offsetLat: -0.011,
-    offsetLng: 0.005,
-  },
-  {
-    vehicleNumber: 'TG09AB1008',
-    type: 'BLS',
-    driverName: 'Naveen Chary',
-    paramedic: 'Lakshmi Prasanna',
-    hospitalIndex: 4,
-    offsetLat: 0.007,
-    offsetLng: -0.013,
-  },
-  {
-    vehicleNumber: 'TG09AB1009',
-    type: 'ALS',
-    driverName: 'Kiran Yadav',
-    paramedic: 'Meera Joseph',
-    hospitalIndex: 8,
-    offsetLat: -0.004,
-    offsetLng: 0.009,
-  },
-  {
-    vehicleNumber: 'TG09AB1010',
-    type: 'PTV',
-    driverName: 'Abdul Kareem',
-    paramedic: 'Sanjay Goud',
-    hospitalIndex: 6,
-    offsetLat: 0.012,
-    offsetLng: 0.011,
   },
 ];
 
@@ -348,51 +244,67 @@ async function seed(): Promise<void> {
     })),
   );
 
-  const vehicles = [];
-  for (const [index, spec] of FLEET.entries()) {
-    const hospital = hospitals[spec.hospitalIndex] ?? hospitals[0];
-    if (!hospital) throw new Error('Seed data is inconsistent: no hospitals were created');
+  const fleet = buildFleet();
 
-    const driver = await User.create({
-      // The first driver gets the memorable address so the demo login works.
-      email: index === 0 ? 'driver@demo.test' : `driver${index + 1}@demo.test`,
-      name: spec.driverName,
-      phone: `+9195000000${String(index + 10).padStart(2, '0')}`,
+  // Built in bulk rather than one round trip per vehicle: at 120 crews the
+  // sequential version took long enough to look broken.
+  const drivers = await User.insertMany(
+    fleet.map((crew) => ({
+      email: crew.driverEmail,
+      name: crew.driverName,
+      phone: `+9195${String(1_000_000 + crew.index).slice(-7)}`,
       passwordHash,
-      role: 'driver',
-      bloodGroup: 'UNKNOWN',
-    });
+      role: 'driver' as const,
+      bloodGroup: 'UNKNOWN' as const,
+    })),
+  );
 
-    const [baseLng, baseLat] = hospital.location.coordinates;
+  /** The hospital a vehicle reports to. Nearest to its patrol point. */
+  const homeHospitalFor = (patrol: { lat: number; lng: number }) => {
+    let closest = hospitals[0]!;
+    let best = Infinity;
+    for (const hospital of hospitals) {
+      const [lng, lat] = hospital.location.coordinates as [number, number];
+      const distance = haversineMetres(patrol, { lat, lng });
+      if (distance < best) {
+        best = distance;
+        closest = hospital;
+      }
+    }
+    return closest;
+  };
+
+  const vehicleDocs = fleet.map((crew, index) => {
     const point = {
       type: 'Point' as const,
-      coordinates: [baseLng + spec.offsetLng, baseLat + spec.offsetLat] as [number, number],
+      coordinates: [crew.patrol.lng, crew.patrol.lat] as [number, number],
     };
 
-    vehicles.push(
-      await Ambulance.create({
-        vehicleNumber: spec.vehicleNumber,
-        type: spec.type,
-        // Two vehicles start off duty, so the control room shows a realistic mix.
-        status: index >= FLEET.length - 2 ? 'OFFLINE' : 'AVAILABLE',
-        driver: driver._id,
-        hospital: hospital._id,
-        crew: [
-          { name: spec.driverName, role: 'Driver' },
-          {
-            name: spec.paramedic,
-            role: spec.type === 'MICU' || spec.type === 'NEONATAL' ? 'Doctor' : 'Paramedic',
-          },
-        ],
-        equipment: EQUIPMENT_BY_TYPE[spec.type],
-        baseLocation: point,
-        location: point,
-        heading: Math.round(Math.random() * 359),
-        speedMps: 0,
-        lastSeenAt: new Date(),
-      }),
-    );
-  }
+    return {
+      vehicleNumber: crew.vehicleNumber,
+      type: crew.type,
+      // A handful start off duty, so the control room shows a realistic mix
+      // rather than a fleet with every vehicle available.
+      status: index % 19 === 11 ? ('OFFLINE' as const) : ('AVAILABLE' as const),
+      driver: drivers[index]!._id,
+      hospital: homeHospitalFor(crew.patrol)._id,
+      crew: [
+        { name: crew.driverName, role: 'Driver' },
+        {
+          name: crew.paramedic,
+          role: crew.type === 'MICU' || crew.type === 'NEONATAL' ? 'Doctor' : 'Paramedic',
+        },
+      ],
+      equipment: EQUIPMENT_BY_TYPE[crew.type],
+      baseLocation: point,
+      location: point,
+      heading: Math.round(Math.random() * 359),
+      speedMps: 0,
+      lastSeenAt: new Date(),
+    };
+  });
+
+  const vehicles = await Ambulance.insertMany(vehicleDocs);
 
   logger.info({ count: vehicles.length }, 'Ambulances created');
 
@@ -405,7 +317,7 @@ async function seed(): Promise<void> {
     `  Password           ${env.SEED_PASSWORD}`,
     '',
     `  Patient            ${patients[0]?.email ?? 'patient@demo.test'}`,
-    '  Driver             driver@demo.test    (crews TG09AB1001, ALS)',
+    `  Driver             driver@demo.test    (crews ${fleet[0]?.vehicleNumber ?? ''}, ${fleet[0]?.type ?? ''})`,
     `  Hospital desk      ${hospitalStaff.email}`,
     `  Control room       ${admin.email}`,
     '',

@@ -6,7 +6,7 @@
  * targets. Live throughout -- the fleet moves on the map as the vehicles move.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Ambulance as AmbulanceIcon,
@@ -34,6 +34,7 @@ import {
   PRIORITY_SLA_MINUTES,
   REQUEST_STATUS_LABELS,
   type AmbulanceDto,
+  type AmbulancePositionEvent,
   type EmergencyRequestDto,
   type FleetStatsDto,
   type HospitalDto,
@@ -56,6 +57,13 @@ import {
 
 /** How often the aggregate figures are refreshed. Live events cover the rest. */
 const STATS_REFRESH_MS = 20_000;
+
+/**
+ * How often buffered vehicle positions are applied to the map. Four times a
+ * second is smooth to the eye and a fraction of the render cost of applying
+ * every fix as it lands.
+ */
+const FLEET_FLUSH_MS = 250;
 
 export function ControlRoom() {
   const { socket } = useAuth();
@@ -111,22 +119,51 @@ export function ControlRoom() {
 
   useSocketEvent('fleet:snapshot', (vehicles) => setFleet(vehicles));
 
+  /**
+   * Position updates are buffered and applied in batches.
+   *
+   * Every vehicle reports once a second, so a full city fleet is well over a
+   * hundred events a second arriving here. Setting state per event would mean
+   * that many React renders a second, each one walking the fleet array and
+   * re-rendering every marker on the map -- the control room would spend all
+   * its time rendering and none of it responding. Collecting the events and
+   * applying them a few times a second gives the same picture for a fraction
+   * of the work, and the markers interpolate between fixes anyway.
+   */
+  const pendingPositions = useRef(new Map<string, AmbulancePositionEvent>());
+
   useSocketEvent('ambulance:position', (event) => {
-    setFleet((previous) =>
-      previous.map((vehicle) =>
-        vehicle.id === event.ambulanceId
-          ? {
-              ...vehicle,
-              location: event.location,
-              heading: event.heading,
-              speedMps: event.speedMps,
-              status: event.status,
-              lastSeenAt: event.at,
-            }
-          : vehicle,
-      ),
-    );
+    // Keyed by vehicle, so several fixes for the same one between flushes
+    // collapse to the newest rather than being applied in turn.
+    pendingPositions.current.set(event.ambulanceId, event);
   });
+
+  useEffect(() => {
+    const flush = window.setInterval(() => {
+      if (pendingPositions.current.size === 0) return;
+
+      const batch = pendingPositions.current;
+      pendingPositions.current = new Map();
+
+      setFleet((previous) =>
+        previous.map((vehicle) => {
+          const update = batch.get(vehicle.id);
+          return update
+            ? {
+                ...vehicle,
+                location: update.location,
+                heading: update.heading,
+                speedMps: update.speedMps,
+                status: update.status,
+                lastSeenAt: update.at,
+              }
+            : vehicle;
+        }),
+      );
+    }, FLEET_FLUSH_MS);
+
+    return () => window.clearInterval(flush);
+  }, []);
 
   useSocketEvent('ambulance:status', (event) => {
     setFleet((previous) =>
