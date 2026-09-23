@@ -283,9 +283,13 @@ async function seed(): Promise<void> {
     return {
       vehicleNumber: crew.vehicleNumber,
       type: crew.type,
-      // A handful start off duty, so the control room shows a realistic mix
-      // rather than a fleet with every vehicle available.
-      status: index % 19 === 11 ? ('OFFLINE' as const) : ('AVAILABLE' as const),
+      // Every vehicle starts off duty. A vehicle with nobody signed on to it
+      // is not available, however the database labels it: the dispatcher will
+      // offer it a case, no one will answer, and the case will cascade through
+      // the nearest vehicles and stall while a crewed ambulance sits further
+      // out. A crew coming on duty is what makes a vehicle dispatchable, which
+      // is also how a real service works.
+      status: 'OFFLINE' as const,
       driver: drivers[index]!._id,
       hospital: homeHospitalFor(crew.patrol)._id,
       crew: [
