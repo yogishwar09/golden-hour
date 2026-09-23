@@ -14,3 +14,6 @@ backend/uploads/*
 .mongodb-binaries/
 *.tsbuildinfo
 backend/.local-db/
+
+# Editor/tooling scratch
+.claude/
