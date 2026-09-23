@@ -13,12 +13,20 @@ services:
     # Singapore is Render's closest region to India; latency matters because
     # every dispatch decision is a round trip to this service.
     region: singapore
-    buildCommand: npm ci && npm run build:shared && npm run build --workspace @sas/backend
+    # --include=dev is required: NODE_ENV is production here, which makes npm
+    # omit devDependencies, and the TypeScript compiler is one of them.
+    buildCommand: npm ci --include=dev && npm run build:shared && npm run build --workspace @sas/backend
     startCommand: node backend/dist/server.js
     healthCheckPath: /api/ready
     envVars:
+      - key: NODE_VERSION
+        value: '22'
       - key: NODE_ENV
         value: production
+      # mongodb-memory-server is a dev dependency the production server never
+      # loads; this stops its install step downloading a MongoDB binary.
+      - key: MONGOMS_DISABLE_POSTINSTALL
+        value: '1'
       # Render supplies PORT; the server reads it.
       - key: JWT_SECRET
         generateValue: true
@@ -35,9 +43,15 @@ services:
   - type: web
     name: golden-hour-web
     runtime: static
-    buildCommand: npm ci && npm run build:shared && npm run build --workspace @sas/frontend
+    # --include=dev for the same reason as the API: vite and the TypeScript
+    # compiler are devDependencies.
+    buildCommand: npm ci --include=dev && npm run build:shared && npm run build --workspace @sas/frontend
     staticPublishPath: frontend/dist
     envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: MONGOMS_DISABLE_POSTINSTALL
+        value: '1'
       # Set in the dashboard to the API service's URL. Vite reads this at BUILD
       # time, so changing it needs a redeploy rather than a restart.
       - key: VITE_API_URL
