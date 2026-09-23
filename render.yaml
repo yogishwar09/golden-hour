@@ -2,7 +2,7 @@
 # The front end deploys to Vercel from frontend/vercel.json.
 services:
   - type: web
-    name: smart-ambulance-api
+    name: golden-hour-api
     runtime: node
     plan: free
     # Singapore is Render's closest region to India; latency matters because

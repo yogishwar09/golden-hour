@@ -349,27 +349,97 @@ cannot receive a fleet-wide broadcast.
 
 ## Deployment
 
-The local stack needs no external services. For a real deployment:
+Three free services: **MongoDB Atlas** for the database, **Render** for the API,
+**Vercel** for the front end. Do them in this order — each needs a value from
+the one before, and the last step closes a loop back to Render.
 
-1. **Database.** Create a free MongoDB Atlas cluster and set `MONGO_URI`.
-   For Hyderabad, Atlas's Mumbai region keeps dispatch queries fast.
-2. **API.** [`render.yaml`](render.yaml) deploys it to Render as-is. Set
-   `MONGO_URI` and `CORS_ORIGINS`; `JWT_SECRET` is generated for you. The service
-   refuses to start in production with the development secret or without a
-   database, by design.
-3. **Front end.** [`frontend/vercel.json`](frontend/vercel.json) deploys it to
-   Vercel. Set `VITE_API_URL` to your API's origin.
-4. **Routing (recommended).** The public OSRM server is rate-limited. Run
-   [your own](https://github.com/Project-OSRM/osrm-backend) and point
-   `OSRM_BASE_URL` at it.
+### 1. Database — MongoDB Atlas
+
+1. Create a free **M0** cluster at [mongodb.com/cloud/atlas](https://www.mongodb.com/cloud/atlas).
+   Choose the **Mumbai (ap-south-1)** region: every dispatch decision is a round
+   trip to this database, so distance costs milliseconds on every call.
+2. **Database Access** → add a user with a password you keep.
+3. **Network Access** → allow `0.0.0.0/0`. Render's free tier has no fixed
+   outbound IP to allow-list.
+4. **Connect** → *Drivers* → copy the connection string. It looks like
+   `mongodb+srv://user:password@cluster0.xxxxx.mongodb.net/`.
+
+Then seed it **from your own machine**, because the Render free tier has no
+shell:
+
+```bash
+MONGO_URI="mongodb+srv://user:password@cluster0.xxxxx.mongodb.net/" npm run seed
+```
+
+That creates the hospitals, the 120-vehicle fleet and the demo accounts. It
+clears those collections first, so run it once at setup, not after you have
+real data.
+
+### 2. API — Render
+
+1. [render.com](https://render.com) → **New** → **Blueprint** → connect this
+   repository. It reads [`render.yaml`](render.yaml) and configures itself.
+2. Set the two values the blueprint leaves blank:
+   - `MONGO_URI` — the Atlas string from step 1
+   - `CORS_ORIGINS` — leave it for now; you get the value in step 3
+3. Deploy, and note the URL: `https://golden-hour-api.onrender.com`.
+
+`JWT_SECRET` is generated for you. The server refuses to start in production
+with the development secret or without a database, by design.
+
+### 3. Front end — Vercel
+
+1. [vercel.com](https://vercel.com) → **Add New** → **Project** → import the
+   repository.
+2. Set **Root Directory** to `frontend`. Vercel then reads
+   [`frontend/vercel.json`](frontend/vercel.json) for the rest.
+3. Add one environment variable:
+   - `VITE_API_URL` = your Render URL from step 2
+4. Deploy, and note the URL: `https://golden-hour.vercel.app`.
+
+`VITE_API_URL` is read at **build** time, not run time. Changing it later needs
+a redeploy, not just a restart.
+
+### 4. Close the loop
+
+Go back to Render and set `CORS_ORIGINS` to your Vercel URL:
+
+```
+CORS_ORIGINS=https://golden-hour.vercel.app
+```
+
+Render restarts, and the site works. Until this step the browser is refused by
+CORS and the sign-in screen shows `Origin ... is not allowed` — which is the
+system behaving correctly, not a bug.
+
+### Making the fleet move
+
+The deployed site shows real data but stationary ambulances: nothing is driving
+them. Point the simulator at your deployed API from your own machine:
+
+```bash
+npm run simulate -- --api https://golden-hour-api.onrender.com
+```
+
+The vehicles move for as long as that command runs. A permanently live demo
+would need the simulator deployed as its own service.
+
+### What the free tiers cost you
+
+- **Render free** spins the service down after 15 minutes idle. The next request
+  takes about 50 seconds to wake it, so a demo link opened cold looks broken for
+  a moment. Open it yourself a minute before showing anyone.
+- **Atlas M0** is 512 MB, which is far more than this needs.
+- **The public OSRM router** is rate-limited. Under demo traffic it is fine; the
+  straight-line fallback covers it when it is not.
+
+See [`.env.example`](.env.example) for every setting.
 
 Or run the whole thing with Docker:
 
 ```bash
 docker compose up --build
 ```
-
-See [`.env.example`](.env.example) for every setting.
 
 ---
 
