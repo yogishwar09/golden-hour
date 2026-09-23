@@ -51,10 +51,21 @@ function parseOptions(): Options {
     speed: Math.max(1, Math.min(20, Number(read('--speed') ?? 1))),
     // Taken from the fleet definition rather than reconstructed, so the
     // simulator and the seed can never disagree about who exists.
-    drivers: buildFleet()
-      .slice(0, count)
-      .map((crew) => crew.driverEmail),
+    //
+    // Sampled evenly across the fleet rather than taken from the front. The
+    // fleet is ordered by patrol grid position, so the first N crews are a
+    // contiguous block of the city -- crewing those alone leaves the rest of
+    // Hyderabad with vehicles that are AVAILABLE but have nobody to answer an
+    // offer, and cases raised there stall until they exhaust the cascade.
+    drivers: everyNth(buildFleet(), count).map((crew) => crew.driverEmail),
   };
+}
+
+/** Picks `count` items spread evenly across the list, always including the first. */
+function everyNth<T>(items: T[], count: number): T[] {
+  if (count >= items.length) return items;
+  const step = items.length / count;
+  return Array.from({ length: count }, (_, index) => items[Math.floor(index * step)]!);
 }
 
 const options = parseOptions();

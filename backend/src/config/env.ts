@@ -63,6 +63,13 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(60_000),
   /** A much tighter budget for the SOS endpoint. */
   SOS_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(6),
+  /**
+   * Sign-in attempts per IP per 15 minutes. The default is deliberately tight,
+   * because unlimited attempts invite credential stuffing. A demonstration
+   * deployment whose fleet is driven by the simulator raises it, since a
+   * hundred-odd crews signing in from one address is legitimate there.
+   */
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(5).default(20),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   /** Seed script password for the demo accounts it creates. */

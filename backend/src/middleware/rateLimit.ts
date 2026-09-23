@@ -49,7 +49,7 @@ export const apiLimiter = rateLimit({
 export const authLimiter = rateLimit({
   ...shared,
   windowMs: 15 * 60 * 1000,
-  limit: 20,
+  limit: env.AUTH_RATE_LIMIT_MAX,
   message: {
     error: {
       code: 'RATE_LIMITED',
