@@ -1,6 +1,11 @@
-# Render blueprint for the API.
-# The front end deploys to Vercel from frontend/vercel.json.
+# One blueprint that deploys the whole system: the API and the web front end.
+#
+# Render reads this when you connect the repository as a Blueprint, and creates
+# both services itself. Keeping the front end here rather than on a second
+# platform means one account, one dashboard and one place to look when
+# something breaks.
 services:
+  # ---------------------------------------------------------------- the API --
   - type: web
     name: golden-hour-api
     runtime: node
@@ -14,12 +19,32 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # Render provides PORT; the server reads it.
+      # Render supplies PORT; the server reads it.
       - key: JWT_SECRET
         generateValue: true
+      # Set in the dashboard: your MongoDB Atlas connection string.
       - key: MONGO_URI
-        sync: false # Set this to your Atlas connection string in the dashboard.
+        sync: false
+      # Set in the dashboard once the web service below has its URL.
       - key: CORS_ORIGINS
-        sync: false # Set this to your deployed front-end origin.
+        sync: false
       - key: LOG_LEVEL
         value: info
+
+  # ----------------------------------------------------------- the web app --
+  - type: web
+    name: golden-hour-web
+    runtime: static
+    buildCommand: npm ci && npm run build:shared && npm run build --workspace @sas/frontend
+    staticPublishPath: frontend/dist
+    envVars:
+      # Set in the dashboard to the API service's URL. Vite reads this at BUILD
+      # time, so changing it needs a redeploy rather than a restart.
+      - key: VITE_API_URL
+        sync: false
+    routes:
+      # A single-page app owns its own routing: every unknown path serves the
+      # shell rather than a 404.
+      - type: rewrite
+        source: /*
+        destination: /index.html

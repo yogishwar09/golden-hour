@@ -349,93 +349,76 @@ cannot receive a fleet-wide broadcast.
 
 ## Deployment
 
-Three free services: **MongoDB Atlas** for the database, **Render** for the API,
-**Vercel** for the front end. Do them in this order — each needs a value from
-the one before, and the last step closes a loop back to Render.
+Two free accounts: **MongoDB Atlas** for the database and **Render** for
+everything else. [`render.yaml`](render.yaml) deploys the API and the web app
+together, so there is one dashboard rather than two.
 
-### 1. Database — MongoDB Atlas
+### 1. Atlas — the database
 
-1. Create a free **M0** cluster at [mongodb.com/cloud/atlas](https://www.mongodb.com/cloud/atlas).
-   Choose the **Mumbai (ap-south-1)** region: every dispatch decision is a round
-   trip to this database, so distance costs milliseconds on every call.
-2. **Database Access** → add a user with a password you keep.
-3. **Network Access** → allow `0.0.0.0/0`. Render's free tier has no fixed
-   outbound IP to allow-list.
-4. **Connect** → *Drivers* → copy the connection string. It looks like
-   `mongodb+srv://user:password@cluster0.xxxxx.mongodb.net/`.
+Sign up at [mongodb.com/cloud/atlas](https://www.mongodb.com/cloud/atlas) and
+create a free **M0** cluster in the **Mumbai (ap-south-1)** region. Every
+dispatch decision is a round trip to this database, so distance costs
+milliseconds on every call.
 
-Then seed it **from your own machine**, because the Render free tier has no
-shell:
+- **Database Access** → create a user, keep the password.
+- **Network Access** → allow `0.0.0.0/0`. Render's free tier has no fixed
+  outbound IP to allow-list.
+- **Connect → Drivers** → copy the connection string.
+
+Seed it from your own machine — Render's free tier has no shell:
 
 ```bash
-MONGO_URI="mongodb+srv://user:password@cluster0.xxxxx.mongodb.net/" npm run seed
+MONGO_URI="mongodb+srv://USER:PASSWORD@cluster0.xxxxx.mongodb.net/" npm run seed
 ```
 
-That creates the hospitals, the 120-vehicle fleet and the demo accounts. It
-clears those collections first, so run it once at setup, not after you have
-real data.
+This clears and recreates the hospitals, the 120-vehicle fleet and the demo
+accounts, so run it at setup rather than after you have real data.
 
-### 2. API — Render
+### 2. Render — the API and the web app
 
-1. [render.com](https://render.com) → **New** → **Blueprint** → connect this
-   repository. It reads [`render.yaml`](render.yaml) and configures itself.
-2. Set the two values the blueprint leaves blank:
-   - `MONGO_URI` — the Atlas string from step 1
-   - `CORS_ORIGINS` — leave it for now; you get the value in step 3
-3. Deploy, and note the URL: `https://golden-hour-api.onrender.com`.
+At [render.com](https://render.com): **New → Blueprint** → connect this
+repository. Render reads `render.yaml` and creates both services.
 
-`JWT_SECRET` is generated for you. The server refuses to start in production
-with the development secret or without a database, by design.
+Three values have to be set by hand, because two of them do not exist until the
+first deploy finishes:
 
-### 3. Front end — Vercel
+| Service | Variable | Value |
+| --- | --- | --- |
+| `golden-hour-api` | `MONGO_URI` | Your Atlas string from step 1 |
+| `golden-hour-web` | `VITE_API_URL` | The API's URL, e.g. `https://golden-hour-api.onrender.com` |
+| `golden-hour-api` | `CORS_ORIGINS` | The web app's URL, e.g. `https://golden-hour-web.onrender.com` |
 
-1. [vercel.com](https://vercel.com) → **Add New** → **Project** → import the
-   repository.
-2. Set **Root Directory** to `frontend`. Vercel then reads
-   [`frontend/vercel.json`](frontend/vercel.json) for the rest.
-3. Add one environment variable:
-   - `VITE_API_URL` = your Render URL from step 2
-4. Deploy, and note the URL: `https://golden-hour.vercel.app`.
+Set `MONGO_URI` first and let both services deploy. Then fill in the other two
+from the URLs Render shows you, and redeploy the web service — `VITE_API_URL`
+is read at build time, so a restart is not enough.
 
-`VITE_API_URL` is read at **build** time, not run time. Changing it later needs
-a redeploy, not just a restart.
-
-### 4. Close the loop
-
-Go back to Render and set `CORS_ORIGINS` to your Vercel URL:
-
-```
-CORS_ORIGINS=https://golden-hour.vercel.app
-```
-
-Render restarts, and the site works. Until this step the browser is refused by
-CORS and the sign-in screen shows `Origin ... is not allowed` — which is the
-system behaving correctly, not a bug.
+Until `CORS_ORIGINS` is set, the sign-in screen reports
+`Origin ... is not allowed`. That is the API refusing an unknown origin, which
+is the security behaving correctly rather than a fault.
 
 ### Making the fleet move
 
-The deployed site shows real data but stationary ambulances: nothing is driving
-them. Point the simulator at your deployed API from your own machine:
+A deployed site shows real data but stationary ambulances, because nothing is
+driving them. Point the simulator at the deployed API from your own machine:
 
 ```bash
 npm run simulate -- --api https://golden-hour-api.onrender.com
 ```
 
-The vehicles move for as long as that command runs. A permanently live demo
-would need the simulator deployed as its own service.
+Vehicles move for as long as that command runs.
 
 ### What the free tiers cost you
 
-- **Render free** spins the service down after 15 minutes idle. The next request
-  takes about 50 seconds to wake it, so a demo link opened cold looks broken for
-  a moment. Open it yourself a minute before showing anyone.
-- **Atlas M0** is 512 MB, which is far more than this needs.
-- **The public OSRM router** is rate-limited. Under demo traffic it is fine; the
-  straight-line fallback covers it when it is not.
+- **Render free** spins a service down after 15 minutes idle, and the next
+  request takes about 50 seconds to wake it. A cold link looks broken for a
+  moment, so open it yourself before showing anyone.
+- **Atlas M0** gives 512 MB, far more than this needs.
+- **The public OSRM router** is rate-limited; the straight-line fallback covers
+  it when it refuses.
 
 See [`.env.example`](.env.example) for every setting.
 
-Or run the whole thing with Docker:
+Or run the whole thing locally with Docker:
 
 ```bash
 docker compose up --build
