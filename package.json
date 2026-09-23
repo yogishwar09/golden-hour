@@ -1,8 +1,8 @@
 {
-  "name": "smart-ambulance",
+  "name": "golden-hour",
   "version": "1.0.0",
   "private": true,
-  "description": "Smart Emergency Ambulance Dispatch System - real-time ambulance dispatch, tracking and hospital coordination",
+  "description": "Real-time emergency ambulance dispatch for Hyderabad",
   "workspaces": [
     "packages/shared",
     "backend",
@@ -26,10 +26,12 @@
     "typecheck": "npm run build:shared && npm run typecheck --workspaces --if-present",
     "format": "prettier --write \"**/*.{ts,tsx,json}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,json}\"",
-    "coverage": "npm run coverage --workspace @sas/backend"
+    "coverage": "npm run coverage --workspace @sas/backend",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
+    "playwright": "^1.63.0",
     "prettier": "^3.9.8",
     "typescript": "^5.7.3"
   }
