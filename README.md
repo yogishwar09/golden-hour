@@ -13,6 +13,71 @@ hospital and the control room looking at the same live incident.
 
 ---
 
+## Why this exists
+
+When someone collapses, the thing that decides the outcome is not the ambulance.
+It is the minutes before it arrives, and most of those minutes are spent on a
+decision: **which vehicle goes, and how fast can it be told?**
+
+In a lot of services that decision is still a person with a radio and a map,
+under load, at three in the morning. They have to know which vehicles are free,
+which are close, which carry the equipment this call needs, and which crew will
+actually answer. Get it wrong and the nearest ambulance sits idle while one
+across the city is sent.
+
+This system makes that decision in software, in under a second, and writes down
+why:
+
+- **Triage before search.** "Nearest" is meaningless until you know *nearest
+  capable*. A cardiac call may not be given a basic vehicle, so capability is
+  part of the query, not a check afterwards.
+- **Offers, not orders.** A crew is offered a case with a countdown. Silence
+  cascades it to the next crew automatically, so a case never waits on someone
+  who is not looking at their screen.
+- **One vehicle, one case.** Every claim is a single atomic update, so two
+  emergencies arriving together can never be sent the same ambulance.
+- **Explainable afterwards.** Every case carries the triage reasoning, every
+  offer and refusal, and a full timeline. When a service is asked why it took
+  eleven minutes, the answer is in the record.
+
+## Who this is for
+
+**Ambulance operators** running their own fleet -- private networks, hospital
+fleets, industrial and campus emergency response -- who dispatch by phone today
+and want the decision made consistently and measured against response targets.
+
+**Anyone building "send the right unit to the right place."** The dispatch core
+is not specific to ambulances. Nearest *capable* unit, offered with a timeout,
+cascading on silence, claimed atomically, tracked live, measured against a
+target -- that is roadside assistance, field engineering, security response and
+home healthcare as much as it is emergency medicine. The parts worth taking are
+[`dispatch.service.ts`](backend/src/services/dispatch.service.ts) and
+[`triage.ts`](packages/shared/src/triage.ts); the rest is the domain wrapped
+around them.
+
+**Anyone who has to justify the design.** The decisions here are written down
+where they were made, including the ones that were wrong first: why capability
+belongs in the query, why the offer timeout cascades, why a vehicle whose crew
+goes silent must stop being dispatchable, why the readiness probe reads a flag
+instead of pinging.
+
+## What it would take to run for real
+
+Honest about the distance between this and a deployed service:
+
+| Needed | Where it stands |
+| --- | --- |
+| Horizontal scaling | Offer timeouts are in-process; a second instance needs a shared delayed queue. The two functions to change are marked. |
+| Crew notifications | A crew must have the page open. Production needs web push or FCM so a phone in a pocket rings. |
+| Telephony | Real services take calls. This takes app requests; a call-taker screen and a phone integration are the bridge. |
+| Addresses | Coordinates only. No reverse geocoding, no landmark search, no what3words. |
+| Hospital capacity | A single bed count, not per-department availability or diversion status. |
+| Regulatory | Patient data here is a name, a phone number and a blood group. Carrying real clinical records means encryption at rest, retention policy and an audit regime that satisfies whoever regulates you. |
+
+What is already production-shaped: the geospatial dispatch, the atomic
+assignment, the realtime layer, the audit trail, the role model, and 68 tests
+that run the dispatcher against a real database rather than a mock.
+
 ## Contents
 
 - [What it does](#what-it-does)
@@ -398,14 +463,28 @@ is the security behaving correctly rather than a fault.
 
 ### Making the fleet move
 
-A deployed site shows real data but stationary ambulances, because nothing is
-driving them. Point the simulator at the deployed API from your own machine:
+Set **`DEMO_FLEET_SIZE`** on the API service, to the number of ambulances the
+server should crew itself:
 
-```bash
-npm run simulate -- --api https://golden-hour-api.onrender.com
+```
+DEMO_FLEET_SIZE=25
 ```
 
-Vehicles move for as long as that command runs.
+Those vehicles come on duty when the API starts, accept the cases offered to
+them, drive the route and hand the patient over -- with nothing running on your
+machine. Leave it unset for a real deployment, which has real crews.
+
+Twenty-five is about what Render's free tier can drive; a paid instance handles
+the full hundred and twenty. Fewer crews means wider spacing and longer ETAs,
+not a broken demo, because crews are spread evenly across the city rather than
+clustered.
+
+The external simulator still exists and is still the honest test -- it uses only
+the public API, so whatever it does a real crew device can do:
+
+```bash
+npm run simulate -- --api https://golden-hour-api.onrender.com --drivers 25
+```
 
 ### What the free tiers cost you
 
