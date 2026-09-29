@@ -10,6 +10,8 @@ import { connectDatabase, disconnectDatabase } from './config/db.js';
 import { createApp } from './app.js';
 import { closeSocketServer, createSocketServer } from './sockets/index.js';
 import { clearAllOfferTimers } from './services/dispatch.service.js';
+import { startDemoFleet, stopDemoFleet } from './services/demoFleet.service.js';
+import { startStaleCrewSweep, stopStaleCrewSweep } from './services/staleCrew.service.js';
 
 async function main(): Promise<void> {
   await connectDatabase();
@@ -26,6 +28,11 @@ async function main(): Promise<void> {
     { port: env.PORT, env: env.NODE_ENV, routing: env.ROUTING_ENABLED ? 'osrm' : 'offline' },
     `Smart Ambulance API listening on http://localhost:${env.PORT}`,
   );
+
+  // A vehicle whose crew has gone silent must stop being offered cases.
+  startStaleCrewSweep();
+  // And, where configured, the server crews part of the fleet itself.
+  await startDemoFleet();
 
   let shuttingDown = false;
 
@@ -46,6 +53,8 @@ async function main(): Promise<void> {
 
     try {
       clearAllOfferTimers();
+      stopDemoFleet();
+      stopStaleCrewSweep();
       await closeSocketServer(io);
       await new Promise<void>((resolve, reject) => {
         httpServer.close((error) => (error ? reject(error) : resolve()));

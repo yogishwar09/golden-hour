@@ -71,6 +71,19 @@ const envSchema = z.object({
    */
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(5).default(20),
 
+  /**
+   * How long a crew may go without reporting position before its vehicle is
+   * taken off duty. A vehicle nobody is listening on is not dispatchable, and
+   * leaving it marked available costs every later case an offer timeout.
+   */
+  CREW_SILENCE_TIMEOUT_SECONDS: z.coerce.number().int().min(60).default(180),
+  /**
+   * Number of ambulances the server itself crews and drives. Zero -- the
+   * default -- means real crews only. A demonstration deployment sets this so
+   * its fleet does not depend on someone leaving a laptop open.
+   */
+  DEMO_FLEET_SIZE: z.coerce.number().int().min(0).max(200).default(0),
+
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   /** Seed script password for the demo accounts it creates. */
   SEED_PASSWORD: z.string().min(8).default('Password123'),

@@ -8,6 +8,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
 import { Ambulance, EmergencyRequest } from '../src/models/index.js';
+import { sweepStaleCrews } from '../src/services/staleCrew.service.js';
 import {
   CENTRE,
   createAmbulance,
@@ -728,5 +729,95 @@ describe('capability matching at scale', () => {
 
     const offered = await waitForOffer();
     expect(offered.vehicleNumber).toBe('TG09ALSFAR');
+  });
+});
+
+describe('crews that stop reporting', () => {
+  it('takes a silent crew off duty so it stops being offered cases', async () => {
+    const hospital = await createHospital();
+    const driver = await createUser({ email: 'silent@example.com', role: 'driver' });
+    const vehicle = await createAmbulance({
+      vehicleNumber: 'TG09SILENT',
+      driver,
+      hospital,
+      at: offset(CENTRE, 300, 0),
+    });
+
+    // A crew that signed on and then vanished: the app was closed, the phone
+    // died, or the process driving it was shut down.
+    vehicle.lastSeenAt = new Date(Date.now() - 10 * 60 * 1000);
+    await vehicle.save();
+
+    expect(await sweepStaleCrews()).toBe(1);
+
+    const after = await Ambulance.findById(vehicle._id);
+    expect(after?.status).toBe('OFFLINE');
+  });
+
+  it('leaves a crew that is still reporting alone', async () => {
+    const hospital = await createHospital();
+    const driver = await createUser({ email: 'active@example.com', role: 'driver' });
+    const vehicle = await createAmbulance({
+      vehicleNumber: 'TG09ACTIVE',
+      driver,
+      hospital,
+      at: offset(CENTRE, 300, 0),
+    });
+    vehicle.lastSeenAt = new Date();
+    await vehicle.save();
+
+    expect(await sweepStaleCrews()).toBe(0);
+    expect((await Ambulance.findById(vehicle._id))?.status).toBe('AVAILABLE');
+  });
+
+  it('never takes a vehicle off duty while it has a patient', async () => {
+    const context = await scenario([{ number: 'TG09MIDCASE', metresAway: 300 }]);
+    const created = await raiseSos(context.patientToken);
+    await waitForOffer('TG09MIDCASE');
+
+    const driverToken = await login(app, context.crews[0]!.driver.email);
+    await request(app)
+      .post('/api/driver/offer')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send({ requestId: created.id, accept: true })
+      .expect(200);
+
+    // Contact lost mid-case. Resolving that is a dispatcher's job; quietly
+    // marking the vehicle free would strand the patient it is carrying.
+    await Ambulance.updateOne(
+      { vehicleNumber: 'TG09MIDCASE' },
+      { $set: { lastSeenAt: new Date(Date.now() - 30 * 60 * 1000) } },
+    );
+
+    expect(await sweepStaleCrews()).toBe(0);
+    const after = await Ambulance.findOne({ vehicleNumber: 'TG09MIDCASE' });
+    expect(after?.status).toBe('DISPATCHED');
+    expect(after?.activeRequest).not.toBeNull();
+  });
+
+  it('will not dispatch to a vehicle once its crew has been swept off duty', async () => {
+    const hospital = await createHospital();
+    const driver = await createUser({ email: 'gone@example.com', role: 'driver' });
+    const vehicle = await createAmbulance({
+      vehicleNumber: 'TG09GONE01',
+      driver,
+      hospital,
+      at: offset(CENTRE, 200, 0),
+    });
+    vehicle.lastSeenAt = new Date(Date.now() - 10 * 60 * 1000);
+    await vehicle.save();
+    await sweepStaleCrews();
+
+    await createUser({ email: 'caller@example.com' });
+    const token = await login(app, 'caller@example.com');
+    const created = await raiseSos(token);
+
+    // The only vehicle in range is off duty, so the case should say so rather
+    // than burning the whole cascade on a vehicle that cannot answer.
+    const settled = await waitFor(async () => {
+      const doc = await EmergencyRequest.findById(created.id);
+      return doc?.status === 'NO_AMBULANCE_AVAILABLE' ? doc : null;
+    });
+    expect(settled.status).toBe('NO_AMBULANCE_AVAILABLE');
   });
 });
