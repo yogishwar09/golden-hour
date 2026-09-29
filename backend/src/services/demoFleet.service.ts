@@ -294,7 +294,14 @@ async function tick(): Promise<void> {
 /** Brings a slice of the fleet on duty and starts driving it. */
 export async function startDemoFleet(): Promise<void> {
   const size = env.DEMO_FLEET_SIZE;
-  if (size <= 0) return;
+  if (size <= 0) {
+    // Said out loud rather than returning in silence. A deployment whose fleet
+    // never comes on duty looks identical to one where dispatch is broken, and
+    // the difference should be one line in the log rather than an
+    // investigation.
+    logger.info('DEMO_FLEET_SIZE is not set - no server-driven crews. Real crews sign on themselves.');
+    return;
+  }
 
   const vehicles = await Ambulance.find({ isActive: true }).sort({ vehicleNumber: 1 });
   if (vehicles.length === 0) {
